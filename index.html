@@ -16,8 +16,11 @@
         
         /* File Input Styling */
         input[type="file"] { border: 1px solid #ccc; padding: 10px; width: 100%; background: #fafafa; border-radius: 4px; }
-        .file-status { font-size: 0.85em; color: #27ae60; margin-top: 5px; display: none; font-weight: bold; }
-        .file-preview { border: 1px dashed #ccc; padding: 10px; background: #f9f9f9; max-height: 150px; overflow-y: auto; font-size: 0.8em; color: #555; margin-top: 5px; display: none; }
+        .file-preview { border: 1px dashed #ccc; padding: 10px; background: #f9f9f9; max-height: 200px; overflow-y: auto; font-size: 0.8em; color: #333; margin-top: 5px; display: none; }
+        
+        /* Preview Table Styles */
+        .file-preview table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+        .file-preview th, .file-preview td { border: 1px solid #ccc; padding: 5px; }
 
         /* Product Name Rows */
         .row-container { margin-bottom: 10px; display: flex; gap: 10px; }
@@ -167,7 +170,7 @@
 
 <script>
     // ------------------------------------------------------------------
-    // 1. MFDS XML Parsing Logic
+    // 1. MFDS XML Parsing Logic (Updated for Tables)
     // ------------------------------------------------------------------
     function handleFileUpload(inputElement, previewId) {
         const file = inputElement.files[0];
@@ -178,13 +181,12 @@
             const xmlContent = e.target.result;
             const parsedHTML = parseMfdsXmlToHtml(xmlContent);
             
-            // Show preview
+            // Show preview (Render the HTML so user can see tables)
             const previewDiv = document.getElementById(previewId);
             previewDiv.style.display = 'block';
-            previewDiv.textContent = "Parsed Content Preview: " + parsedHTML.replace(/<[^>]*>?/gm, '').substring(0, 100) + "...";
+            previewDiv.innerHTML = parsedHTML; // Use innerHTML to render tables in preview
             
             // Store hidden data
-            // We store the 'clean' HTML to be injected into the FHIR bundle
             const hiddenInputId = inputElement.id.replace('file', 'data'); 
             document.getElementById(hiddenInputId).value = parsedHTML;
         };
@@ -200,6 +202,38 @@
         // Find all ARTICLES. Structure: DOC -> SECTION -> ARTICLE -> PARAGRAPH
         const articles = xmlDoc.getElementsByTagName("ARTICLE");
         
+        const processParagraphs = (paragraphs) => {
+            let chunkHtml = "";
+            for (let j = 0; j < paragraphs.length; j++) {
+                // textContent retrieves the CDATA content (which may contain HTML tags)
+                let text = paragraphs[j].textContent.trim();
+                
+                if (!text) continue;
+
+                // Check if the content contains HTML Table tags (tbody, tr, table)
+                const isTable = text.includes('<tbody') || text.includes('<tr') || text.includes('<table');
+                
+                if (isTable) {
+                    // Fix MFDS Table: If it has <tbody> but no <table> wrapper, add it.
+                    if (!text.includes('<table')) {
+                        text = `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse: collapse; margin-top:10px;">${text}</table>`;
+                    }
+                    // For tables, we DO NOT escape HTML. We treat it as valid XHTML.
+                    chunkHtml += `<div>${text}</div>`;
+                } else {
+                    // For normal text, we usually want to treat it as paragraph.
+                    // If the text already has <p> tags inside CDATA, we don't wrap it again.
+                    if (text.startsWith('<p') || text.startsWith('<div')) {
+                        chunkHtml += text;
+                    } else {
+                        // Plain text, safe to escape and wrap
+                        chunkHtml += `<p>${escapeHtml(text)}</p>`;
+                    }
+                }
+            }
+            return chunkHtml;
+        };
+
         if (articles.length > 0) {
             for (let i = 0; i < articles.length; i++) {
                 const article = articles[i];
@@ -210,22 +244,12 @@
                 }
                 
                 const paragraphs = article.getElementsByTagName("PARAGRAPH");
-                for (let j = 0; j < paragraphs.length; j++) {
-                    // textContent retrieves text inside CDATA as well
-                    const text = paragraphs[j].textContent; 
-                    // We wrap it in <p>. Note: if CDATA contained HTML tags (like <sup>), 
-                    // they are now part of the string. We trust the input or escape it.
-                    // For FHIR readable text, we generally want to allow basic formatting if present,
-                    // but to be safe against XML errors, we can escape the text content.
-                    htmlOutput += `<p>${escapeHtml(text)}</p>`;
-                }
+                htmlOutput += processParagraphs(paragraphs);
             }
         } else {
-            // Fallback if no ARTICLE tags found (just dump all paragraphs)
+            // Fallback if no ARTICLE tags
             const paragraphs = xmlDoc.getElementsByTagName("PARAGRAPH");
-            for (let j = 0; j < paragraphs.length; j++) {
-                htmlOutput += `<p>${escapeHtml(paragraphs[j].textContent)}</p>`;
-            }
+            htmlOutput += processParagraphs(paragraphs);
         }
 
         return htmlOutput;
@@ -246,8 +270,6 @@
 
     function escapeHtml(text) {
         if (!text) return '';
-        // Note: For the XML Parser above, we might be double escaping if we are not careful.
-        // But for standard text inputs, this is required.
         return text
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
@@ -302,7 +324,7 @@
         const mainTitle = productNamesList.length > 0 ? productNamesList[0] : 'Product Name';
         const productNameHtml = productNamesList.map(name => `<p>${escapeHtml(name)}</p>`).join('');
 
-        // Ingredients (Table Construction)
+        // Ingredients
         const ingBaseAmount = document.getElementById('ingBaseAmount').value;
         const ingRows = document.querySelectorAll('#ingTable tbody tr');
         let ingredientHtml = "";
@@ -321,9 +343,7 @@
         });
         ingredientHtml += `</tbody></table>`;
 
-        // Retrieve Parsed XML Data (or empty if not uploaded)
-        // Note: These strings are already formatted as HTML tags (<h3>, <p>) by the parser.
-        // We do NOT escape them again here, otherwise tags will show as text.
+        // Retrieved XML Data (Already Parsed & HTML fixed)
         const indicationsHtml = document.getElementById('dataIndications').value || '<p>정보 없음</p>';
         const dosageHtml = document.getElementById('dataDosage').value || '<p>정보 없음</p>';
         const precautionsHtml = document.getElementById('dataPrecautions').value || '<p>정보 없음</p>';
