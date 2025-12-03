@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePI FHIR XML Generator (MFDS Compatible - v2.1)</title>
+    <title>ePI FHIR XML Generator (MFDS Compatible - v2.2)</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -33,7 +33,7 @@
 <body>
 
 <div class="container">
-    <h1>ePI XML Builder (v2.1)</h1>
+    <h1>ePI XML Builder (v2.2)</h1>
 
     <!-- 1. Basic Info -->
     <h2>기본 정보 (Author/Organization)</h2>
@@ -158,7 +158,7 @@
 
 <script>
     // ------------------------------------------------------------------
-    // 1. Parsing Logic
+    // 1. Parsing Logic (Updated to preserve <sup>, <sub>, <b>)
     // ------------------------------------------------------------------
     function handleFileUpload(inputElement, previewId) {
         const file = inputElement.files[0];
@@ -169,17 +169,15 @@
             const xmlContent = e.target.result;
             // Parse XML and extract HTML
             const rawHtml = parseMfdsXmlToHtml(xmlContent);
-            // Sanitize/Normalize to ensure valid XHTML (self-closing tags)
-            const xhtmlSafe = ensureXHTML(rawHtml);
-
-            // Preview
+            // No extra ensureXHTML call needed here as it's done per paragraph in parsing
+            // But we do it one last time to be safe for the preview
             const previewDiv = document.getElementById(previewId);
             previewDiv.style.display = 'block';
-            previewDiv.innerHTML = xhtmlSafe; 
+            previewDiv.innerHTML = rawHtml; 
             
-            // Store
+            // Store hidden data
             const hiddenInputId = inputElement.id.replace('file', 'data'); 
-            document.getElementById(hiddenInputId).value = xhtmlSafe;
+            document.getElementById(hiddenInputId).value = rawHtml;
         };
         reader.readAsText(file);
     }
@@ -197,20 +195,24 @@
                 let text = paragraphs[j].textContent.trim();
                 if (!text) continue;
 
-                // Handle Tables
+                // Detect Table
                 const isTable = text.includes('<tbody') || text.includes('<tr') || text.includes('<table');
                 
                 if (isTable) {
                     if (!text.includes('<table')) {
                         text = `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse: collapse; width: 100%; margin-top: 10px;">${text}</table>`;
                     }
-                    chunkHtml += `<div>${text}</div>`;
+                    chunkHtml += `<div>${ensureXHTML(text)}</div>`;
                 } else {
-                    if (text.startsWith('<p') || text.startsWith('<div')) {
-                        chunkHtml += text;
+                    // Check for block level tags or just text with inline tags
+                    const lower = text.toLowerCase();
+                    // If it starts with a block tag, don't wrap in <p>
+                    if (lower.startsWith('<p') || lower.startsWith('<div')) {
+                        chunkHtml += ensureXHTML(text);
                     } else {
-                        // Regular text paragraph
-                        chunkHtml += `<p>${escapeHtml(text)}</p>`;
+                        // Plain text or text with inline tags (<sup>, <b>, etc.)
+                        // Wrap in <p> but DO NOT escape HTML tags inside.
+                        chunkHtml += `<p>${ensureXHTML(text)}</p>`;
                     }
                 }
             }
@@ -221,7 +223,7 @@
             for (let i = 0; i < articles.length; i++) {
                 const article = articles[i];
                 const title = article.getAttribute("title");
-                if (title) htmlOutput += `<h3>${escapeHtml(title)}</h3>`;
+                if (title) htmlOutput += `<h4>${escapeHtml(title)}</h4>`; // Sub-headers within XML
                 
                 const paragraphs = article.getElementsByTagName("PARAGRAPH");
                 htmlOutput += processParagraphs(paragraphs);
@@ -233,26 +235,27 @@
         return htmlOutput;
     }
 
-    // New Helper: Ensures the HTML string is valid XHTML 
-    // AND replaces &nbsp; with &#160; to prevent XML parsing errors
+    // Helper: Validates HTML string and returns XHTML safe string
+    // Preserves tags like <sup>, <sub>, <b>, etc.
+    // Handles &nbsp; -> &#160;
     function ensureXHTML(htmlString) {
-        // Parse as HTML
+        // Parse as HTML (this allows browser to handle <sup> tags correctly)
         const doc = new DOMParser().parseFromString(`<div>${htmlString}</div>`, 'text/html');
         
-        // Serialize back to valid XML (XHTML)
         const serializer = new XMLSerializer();
         let result = "";
         
-        // Serialize only children of the wrapper div
+        // Serialize children back to XML string
         if(doc.body.firstChild) {
             for(let child of doc.body.firstChild.childNodes) {
                 result += serializer.serializeToString(child);
             }
         }
 
-        // CRITICAL FIX: Replace &nbsp; with &#160; (XML safe non-breaking space)
-        // Also ensure no other named entities sneak in.
-        return result.replace(/&nbsp;/g, "&#160;");
+        // Replacements for strict XML validity
+        return result
+            .replace(/&nbsp;/g, "&#160;")
+            .replace(/\u00A0/g, "&#160;");
     }
 
     // ------------------------------------------------------------------
@@ -268,6 +271,7 @@
     function getIsoTimestamp() { return new Date().toISOString(); }
     function getCurrentDate() { return new Date().toISOString().split('T')[0]; }
 
+    // Standard escape for manual text inputs where no HTML is expected
     function escapeHtml(text) {
         if (!text) return '';
         return text
@@ -275,9 +279,7 @@
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;")
-            .replace(/\u00A0/g, "&#160;") // Handle non-breaking space chars
-            .replace(/&nbsp;/g, "&#160;"); // Handle literal &nbsp;
+            .replace(/'/g, "&#039;");
     }
 
     // ------------------------------------------------------------------
@@ -310,7 +312,7 @@
     function removeRow(btn) { btn.closest('tr').remove(); }
 
     // ------------------------------------------------------------------
-    // 4. Enhanced FHIR Generation Logic
+    // 4. Enhanced FHIR Generation Logic (With Titles)
     // ------------------------------------------------------------------
     function generateXML() {
         // --- Data Gathering ---
@@ -322,14 +324,15 @@
         let productNamesList = [];
         productInputs.forEach(input => { if(input.value.trim()) productNamesList.push(input.value.trim()); });
         const mainTitle = productNamesList.length > 0 ? productNamesList[0] : 'Product Name';
+        // Note: We don't usually add a header inside the Product Name section itself as the section title says "Product Name"
         const productNameHtml = productNamesList.map(name => `<p>${escapeHtml(name)}</p>`).join('');
 
         // Ingredients
         const ingBaseAmount = document.getElementById('ingBaseAmount').value;
         const ingRows = document.querySelectorAll('#ingTable tbody tr');
-        let ingredientHtml = "";
+        let ingredientHtml = `<h3>원료약품 및 분량</h3>`; // Added Title
+        
         if(ingBaseAmount) ingredientHtml += `<p>이 약 ${escapeHtml(ingBaseAmount)} 중</p>`;
-        else ingredientHtml += `<p>원료약품 및 분량</p>`;
         
         ingredientHtml += `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse: collapse;"><thead><tr style="background-color:#f0f0f0;"><th>배합목적</th><th>원료명</th><th>분량</th><th>규격</th></tr></thead><tbody>`;
         let hasIngredients = false;
@@ -344,20 +347,33 @@
             }
         });
         ingredientHtml += `</tbody></table>`;
-        if(!hasIngredients) ingredientHtml = "<p>정보 없음</p>";
+        if(!hasIngredients) ingredientHtml = `<h3>원료약품 및 분량</h3><p>정보 없음</p>`;
 
-        // Texts
-        const indicationsHtml = document.getElementById('dataIndications').value || '<p>정보 없음</p>';
-        const dosageHtml = document.getElementById('dataDosage').value || '<p>정보 없음</p>';
-        const precautionsHtml = document.getElementById('dataPrecautions').value || '<p>정보 없음</p>';
+        // Texts - Added Titles
+        const indicationsRaw = document.getElementById('dataIndications').value;
+        const indicationsHtml = `<h3>효능효과</h3>` + (indicationsRaw || '<p>정보 없음</p>');
+
+        const dosageRaw = document.getElementById('dataDosage').value;
+        const dosageHtml = `<h3>용법용량</h3>` + (dosageRaw || '<p>정보 없음</p>');
+
+        const precautionsRaw = document.getElementById('dataPrecautions').value;
+        const precautionsHtml = `<h3>사용상의 주의사항</h3>` + (precautionsRaw || '<p>정보 없음</p>');
         
-        const appearance = escapeHtml(document.getElementById('appearance').value);
-        const packaging = escapeHtml(document.getElementById('packaging').value);
-        const storage = escapeHtml(document.getElementById('storage').value);
-        const shelfLife = escapeHtml(document.getElementById('shelfLife').value);
-        const otherInfo = document.getElementById('otherInfo').value ? `<p>${escapeHtml(document.getElementById('otherInfo').value)}</p>` : "<p>정보 없음</p>";
+        // Manual Texts - Added Titles
+        const appearanceRaw = escapeHtml(document.getElementById('appearance').value);
+        const appearanceHtml = `<h3>성상</h3><p>${appearanceRaw}</p>`;
 
-        const manufName = document.getElementById('manufacturer').value.trim() || orgName; // Default to orgName if empty
+        const packagingRaw = escapeHtml(document.getElementById('packaging').value);
+        const packagingHtml = `<h3>포장단위</h3><p>${packagingRaw}</p>`;
+
+        const storageRaw = escapeHtml(document.getElementById('storage').value);
+        const shelfLifeRaw = escapeHtml(document.getElementById('shelfLife').value);
+        const storageAndShelfLifeHtml = `<h3>저장방법 및 사용기간</h3><p><strong>저장방법:</strong> ${storageRaw}</p><p><strong>사용기간:</strong> ${shelfLifeRaw}</p>`;
+
+        const otherInfoRaw = document.getElementById('otherInfo').value;
+        const otherInfoHtml = `<h3>기타 안내사항</h3>` + (otherInfoRaw ? `<p>${escapeHtml(otherInfoRaw)}</p>` : "<p>정보 없음</p>");
+
+        const manufName = document.getElementById('manufacturer').value.trim() || orgName;
         const importerName = document.getElementById('importer').value.trim();
 
         // --- ID Management ---
@@ -366,7 +382,6 @@
         const timestamp = getIsoTimestamp();
         const dateOnly = getCurrentDate();
 
-        // Organization Registry (Name -> UUID)
         let orgRegistry = {};
 
         function getOrgId(name) {
@@ -379,9 +394,9 @@
 
         const authorOrgId = getOrgId(orgName);
         const manufOrgId = getOrgId(manufName);
-        const importerOrgId = getOrgId(importerName); // might be null
+        const importerOrgId = getOrgId(importerName);
 
-        // --- Build XML using Array for cleanliness ---
+        // --- Build XML ---
         let bundleEntries = [];
 
         // 1. COMPOSITION Entry
@@ -390,6 +405,7 @@
         const addSection = (title, code, textContent, entryRefId = null) => {
             let sectionXml = `<section><title value="${title}"/><code><coding><system value="2.16.840.1.113883.6.1"/><code value="${code}"/><display value="Section"/></coding></code>`;
             if (textContent) {
+                // IMPORTANT: The text content already has <h3> headers embedded above
                 sectionXml += `<text><div xmlns="http://www.w3.org/1999/xhtml">${textContent}</div></text>`;
             }
             if (entryRefId) {
@@ -400,20 +416,20 @@
         };
 
         addSection("제품명", "69718-5", productNameHtml);
-        addSection("성상", "34089-3", `<p>${appearance}</p>`);
+        addSection("성상", "34089-3", appearanceHtml);
         addSection("원료약품 및 그 분량", "34089-3", ingredientHtml);
         addSection("효능효과", "34067-9", indicationsHtml);
         addSection("용법·용량", "34068-7", dosageHtml);
         addSection("사용상의 주의사항", "43685-7", precautionsHtml);
-        addSection("포장단위", "34069-5", `<p>${packaging}</p>`);
-        addSection("저장방법, 사용기간", "44425-7", `<p><strong>저장방법:</strong> ${storage}</p><p><strong>사용기간:</strong> ${shelfLife}</p>`);
-        addSection("제조원", "42229-5", null, manufOrgId);
+        addSection("포장단위", "34069-5", packagingHtml);
+        addSection("저장방법, 사용기간", "44425-7", storageAndShelfLifeHtml);
+        addSection("제조원", "42229-5", null, manufOrgId); // No text, only ref
         
         if (importerOrgId) {
             addSection("수입자", "42229-5", null, importerOrgId);
         }
 
-        addSection("기타 안내사항", "42229-5", otherInfo);
+        addSection("기타 안내사항", "42229-5", otherInfoHtml);
 
         const compositionXml = `
     <entry>
