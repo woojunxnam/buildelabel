@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePI FHIR XML Generator (MFDS Compatible - v2.2)</title>
+    <title>ePI FHIR XML Generator (MFDS Compatible - v2.3)</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -33,7 +33,7 @@
 <body>
 
 <div class="container">
-    <h1>ePI XML Builder (v2.2)</h1>
+    <h1>ePI XML Builder (v2.3)</h1>
 
     <!-- 1. Basic Info -->
     <h2>기본 정보 (Author/Organization)</h2>
@@ -158,7 +158,7 @@
 
 <script>
     // ------------------------------------------------------------------
-    // 1. Parsing Logic (Updated to preserve <sup>, <sub>, <b>)
+    // 1. Parsing Logic
     // ------------------------------------------------------------------
     function handleFileUpload(inputElement, previewId) {
         const file = inputElement.files[0];
@@ -166,16 +166,20 @@
 
         const reader = new FileReader();
         reader.onload = function(e) {
-            const xmlContent = e.target.result;
-            // Parse XML and extract HTML
+            let xmlContent = e.target.result;
+
+            // FIX: Replace &nbsp; with &#160; globally BEFORE parsing XML.
+            // This prevents "Entity 'nbsp' not defined" error in DOMParser.
+            xmlContent = xmlContent.replace(/&nbsp;/g, "&#160;");
+
             const rawHtml = parseMfdsXmlToHtml(xmlContent);
-            // No extra ensureXHTML call needed here as it's done per paragraph in parsing
-            // But we do it one last time to be safe for the preview
+            
+            // Preview
             const previewDiv = document.getElementById(previewId);
             previewDiv.style.display = 'block';
             previewDiv.innerHTML = rawHtml; 
             
-            // Store hidden data
+            // Store
             const hiddenInputId = inputElement.id.replace('file', 'data'); 
             document.getElementById(hiddenInputId).value = rawHtml;
         };
@@ -184,6 +188,8 @@
 
     function parseMfdsXmlToHtml(xmlString) {
         const parser = new DOMParser();
+        // If xmlString still has issues, parser might return an error document.
+        // We assume pre-cleaning fixed the main entity issues.
         const xmlDoc = parser.parseFromString(xmlString, "text/xml");
         
         let htmlOutput = "";
@@ -195,23 +201,24 @@
                 let text = paragraphs[j].textContent.trim();
                 if (!text) continue;
 
-                // Detect Table
-                const isTable = text.includes('<tbody') || text.includes('<tr') || text.includes('<table');
+                // Logic: Detect if it contains table parts
+                // If contains <tbody> but no <table>, wrap it (as per your snippet logic)
+                const hasTbody = text.includes('<tbody');
+                const hasTable = text.includes('<table');
                 
-                if (isTable) {
-                    if (!text.includes('<table')) {
+                if (hasTbody || hasTable || text.includes('<tr')) {
+                    if (!hasTable) {
                         text = `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse: collapse; width: 100%; margin-top: 10px;">${text}</table>`;
                     }
                     chunkHtml += `<div>${ensureXHTML(text)}</div>`;
                 } else {
-                    // Check for block level tags or just text with inline tags
+                    // Check for block level tags
                     const lower = text.toLowerCase();
-                    // If it starts with a block tag, don't wrap in <p>
                     if (lower.startsWith('<p') || lower.startsWith('<div')) {
                         chunkHtml += ensureXHTML(text);
                     } else {
-                        // Plain text or text with inline tags (<sup>, <b>, etc.)
-                        // Wrap in <p> but DO NOT escape HTML tags inside.
+                        // Plain text or text with inline tags (<sup>, <b>)
+                        // Wrap in <p> but preserve internal HTML
                         chunkHtml += `<p>${ensureXHTML(text)}</p>`;
                     }
                 }
@@ -223,7 +230,7 @@
             for (let i = 0; i < articles.length; i++) {
                 const article = articles[i];
                 const title = article.getAttribute("title");
-                if (title) htmlOutput += `<h4>${escapeHtml(title)}</h4>`; // Sub-headers within XML
+                if (title) htmlOutput += `<h4>${escapeHtml(title)}</h4>`;
                 
                 const paragraphs = article.getElementsByTagName("PARAGRAPH");
                 htmlOutput += processParagraphs(paragraphs);
@@ -236,10 +243,8 @@
     }
 
     // Helper: Validates HTML string and returns XHTML safe string
-    // Preserves tags like <sup>, <sub>, <b>, etc.
-    // Handles &nbsp; -> &#160;
     function ensureXHTML(htmlString) {
-        // Parse as HTML (this allows browser to handle <sup> tags correctly)
+        // Parse as HTML (browser handles <sup>, <b>, &nbsp; correctly here)
         const doc = new DOMParser().parseFromString(`<div>${htmlString}</div>`, 'text/html');
         
         const serializer = new XMLSerializer();
@@ -252,7 +257,8 @@
             }
         }
 
-        // Replacements for strict XML validity
+        // POST-CLEAN: Ensure no &nbsp; remains in the output string.
+        // Replace unicode non-breaking space (\u00A0) with &#160;
         return result
             .replace(/&nbsp;/g, "&#160;")
             .replace(/\u00A0/g, "&#160;");
@@ -271,7 +277,6 @@
     function getIsoTimestamp() { return new Date().toISOString(); }
     function getCurrentDate() { return new Date().toISOString().split('T')[0]; }
 
-    // Standard escape for manual text inputs where no HTML is expected
     function escapeHtml(text) {
         if (!text) return '';
         return text
@@ -324,13 +329,12 @@
         let productNamesList = [];
         productInputs.forEach(input => { if(input.value.trim()) productNamesList.push(input.value.trim()); });
         const mainTitle = productNamesList.length > 0 ? productNamesList[0] : 'Product Name';
-        // Note: We don't usually add a header inside the Product Name section itself as the section title says "Product Name"
         const productNameHtml = productNamesList.map(name => `<p>${escapeHtml(name)}</p>`).join('');
 
         // Ingredients
         const ingBaseAmount = document.getElementById('ingBaseAmount').value;
         const ingRows = document.querySelectorAll('#ingTable tbody tr');
-        let ingredientHtml = `<h3>원료약품 및 분량</h3>`; // Added Title
+        let ingredientHtml = `<h3>원료약품 및 분량</h3>`; 
         
         if(ingBaseAmount) ingredientHtml += `<p>이 약 ${escapeHtml(ingBaseAmount)} 중</p>`;
         
@@ -349,7 +353,7 @@
         ingredientHtml += `</tbody></table>`;
         if(!hasIngredients) ingredientHtml = `<h3>원료약품 및 분량</h3><p>정보 없음</p>`;
 
-        // Texts - Added Titles
+        // Texts - Added Titles (h3)
         const indicationsRaw = document.getElementById('dataIndications').value;
         const indicationsHtml = `<h3>효능효과</h3>` + (indicationsRaw || '<p>정보 없음</p>');
 
@@ -359,7 +363,7 @@
         const precautionsRaw = document.getElementById('dataPrecautions').value;
         const precautionsHtml = `<h3>사용상의 주의사항</h3>` + (precautionsRaw || '<p>정보 없음</p>');
         
-        // Manual Texts - Added Titles
+        // Manual Texts
         const appearanceRaw = escapeHtml(document.getElementById('appearance').value);
         const appearanceHtml = `<h3>성상</h3><p>${appearanceRaw}</p>`;
 
@@ -405,7 +409,7 @@
         const addSection = (title, code, textContent, entryRefId = null) => {
             let sectionXml = `<section><title value="${title}"/><code><coding><system value="2.16.840.1.113883.6.1"/><code value="${code}"/><display value="Section"/></coding></code>`;
             if (textContent) {
-                // IMPORTANT: The text content already has <h3> headers embedded above
+                // IMPORTANT: The textContent now contains XHTMLSafe content + h3 headers
                 sectionXml += `<text><div xmlns="http://www.w3.org/1999/xhtml">${textContent}</div></text>`;
             }
             if (entryRefId) {
@@ -423,7 +427,7 @@
         addSection("사용상의 주의사항", "43685-7", precautionsHtml);
         addSection("포장단위", "34069-5", packagingHtml);
         addSection("저장방법, 사용기간", "44425-7", storageAndShelfLifeHtml);
-        addSection("제조원", "42229-5", null, manufOrgId); // No text, only ref
+        addSection("제조원", "42229-5", null, manufOrgId);
         
         if (importerOrgId) {
             addSection("수입자", "42229-5", null, importerOrgId);
