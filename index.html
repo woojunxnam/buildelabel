@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePI FHIR XML Generator (MFDS Compatible - v2.3)</title>
+    <title>ePI FHIR XML Generator (MFDS Compatible - v2.4)</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -28,12 +28,14 @@
         .action-area { margin-top: 40px; text-align: center; padding-top: 20px; border-top: 2px solid #eee; }
         .btn-generate { background-color: #27ae60; color: white; border: none; padding: 15px 30px; font-size: 1.1em; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
         .btn-generate:hover { background-color: #219150; }
+        /* Style specifically for the HTML extraction preview */
+        .html-extract-preview img { max-width: 100%; height: auto; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>ePI XML Builder (v2.3)</h1>
+    <h1>ePI XML Builder (v2.4)</h1>
 
     <!-- 1. Basic Info -->
     <h2>기본 정보 (Author/Organization)</h2>
@@ -99,23 +101,32 @@
     <!-- XML File Uploads -->
     <div class="form-group">
         <label>효능효과 (XML 파일 업로드) **</label>
-        <input type="file" id="fileIndications" accept=".xml" onchange="handleFileUpload(this, 'previewIndications')">
+        <input type="file" id="fileIndications" accept=".xml" onchange="handleXmlUpload(this, 'previewIndications')">
         <div id="previewIndications" class="file-preview"></div>
         <input type="hidden" id="dataIndications">
     </div>
 
     <div class="form-group">
         <label>용법용량 (XML 파일 업로드) **</label>
-        <input type="file" id="fileDosage" accept=".xml" onchange="handleFileUpload(this, 'previewDosage')">
+        <input type="file" id="fileDosage" accept=".xml" onchange="handleXmlUpload(this, 'previewDosage')">
         <div id="previewDosage" class="file-preview"></div>
         <input type="hidden" id="dataDosage">
     </div>
 
     <div class="form-group">
         <label>사용상의 주의사항 (XML 파일 업로드) **</label>
-        <input type="file" id="filePrecautions" accept=".xml" onchange="handleFileUpload(this, 'previewPrecautions')">
+        <input type="file" id="filePrecautions" accept=".xml" onchange="handleXmlUpload(this, 'previewPrecautions')">
         <div id="previewPrecautions" class="file-preview"></div>
         <input type="hidden" id="dataPrecautions">
+    </div>
+
+    <!-- NEW SECTION: Expert Info HTML Upload -->
+    <div class="form-group" style="background: #eef2f5; padding: 15px; border-radius: 5px;">
+        <label>전문가를 위한 정보 (HTML 파일 업로드) [선택사항]</label>
+        <p style="font-size:0.8em; color:#666; margin-top:-5px;">* 전체 HTML 파일에서 '전문가를 위한 정보' 항목부터 끝까지 자동으로 추출합니다.</p>
+        <input type="file" id="fileExpert" accept=".html,.htm" onchange="handleHtmlUpload(this, 'previewExpert')">
+        <div id="previewExpert" class="file-preview html-extract-preview"></div>
+        <input type="hidden" id="dataExpert">
     </div>
 
     <!-- Remaining Info -->
@@ -158,28 +169,24 @@
 
 <script>
     // ------------------------------------------------------------------
-    // 1. Parsing Logic
+    // 1. Parsing Logic - XML
     // ------------------------------------------------------------------
-    function handleFileUpload(inputElement, previewId) {
+    function handleXmlUpload(inputElement, previewId) {
         const file = inputElement.files[0];
         if (!file) return;
 
         const reader = new FileReader();
         reader.onload = function(e) {
             let xmlContent = e.target.result;
-
-            // FIX: Replace &nbsp; with &#160; globally BEFORE parsing XML.
-            // This prevents "Entity 'nbsp' not defined" error in DOMParser.
+            // Pre-clean entities
             xmlContent = xmlContent.replace(/&nbsp;/g, "&#160;");
 
             const rawHtml = parseMfdsXmlToHtml(xmlContent);
             
-            // Preview
             const previewDiv = document.getElementById(previewId);
             previewDiv.style.display = 'block';
             previewDiv.innerHTML = rawHtml; 
             
-            // Store
             const hiddenInputId = inputElement.id.replace('file', 'data'); 
             document.getElementById(hiddenInputId).value = rawHtml;
         };
@@ -188,8 +195,6 @@
 
     function parseMfdsXmlToHtml(xmlString) {
         const parser = new DOMParser();
-        // If xmlString still has issues, parser might return an error document.
-        // We assume pre-cleaning fixed the main entity issues.
         const xmlDoc = parser.parseFromString(xmlString, "text/xml");
         
         let htmlOutput = "";
@@ -201,8 +206,7 @@
                 let text = paragraphs[j].textContent.trim();
                 if (!text) continue;
 
-                // Logic: Detect if it contains table parts
-                // If contains <tbody> but no <table>, wrap it (as per your snippet logic)
+                // Check for Tables
                 const hasTbody = text.includes('<tbody');
                 const hasTable = text.includes('<table');
                 
@@ -212,13 +216,10 @@
                     }
                     chunkHtml += `<div>${ensureXHTML(text)}</div>`;
                 } else {
-                    // Check for block level tags
                     const lower = text.toLowerCase();
                     if (lower.startsWith('<p') || lower.startsWith('<div')) {
                         chunkHtml += ensureXHTML(text);
                     } else {
-                        // Plain text or text with inline tags (<sup>, <b>)
-                        // Wrap in <p> but preserve internal HTML
                         chunkHtml += `<p>${ensureXHTML(text)}</p>`;
                     }
                 }
@@ -242,31 +243,90 @@
         return htmlOutput;
     }
 
-    // Helper: Validates HTML string and returns XHTML safe string
-    function ensureXHTML(htmlString) {
-        // Parse as HTML (browser handles <sup>, <b>, &nbsp; correctly here)
-        const doc = new DOMParser().parseFromString(`<div>${htmlString}</div>`, 'text/html');
+    // ------------------------------------------------------------------
+    // 2. Parsing Logic - HTML (Expert Info)
+    // ------------------------------------------------------------------
+    function handleHtmlUpload(inputElement, previewId) {
+        const file = inputElement.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            let htmlContent = e.target.result;
+            
+            // Extract only the relevant section
+            const extractedHtml = extractExpertInfo(htmlContent);
+            // Sanitize to XHTML
+            const safeHtml = ensureXHTML(extractedHtml);
+
+            // Preview
+            const previewDiv = document.getElementById(previewId);
+            previewDiv.style.display = 'block';
+            previewDiv.innerHTML = safeHtml;
+            
+            // Store
+            const hiddenInputId = inputElement.id.replace('file', 'data'); 
+            document.getElementById(hiddenInputId).value = safeHtml;
+        };
+        reader.readAsText(file);
+    }
+
+    function extractExpertInfo(fullHtml) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(fullHtml, "text/html");
         
-        const serializer = new XMLSerializer();
+        // We want to find the section that contains "전문가를 위한 정보"
+        // and grab everything after it (including itself or its siblings).
+        // Since HTML structure varies, we iterate through body children.
+        
+        let foundStart = false;
         let result = "";
         
-        // Serialize children back to XML string
+        const bodyChildren = doc.body.children;
+        
+        for (let i = 0; i < bodyChildren.length; i++) {
+            const element = bodyChildren[i];
+            const text = element.textContent.trim().replace(/\s/g, ''); // remove spaces for comparison
+            
+            // Check for trigger phrase
+            if (!foundStart && text.includes("전문가를위한정보")) {
+                foundStart = true;
+                // Add a clean header
+                result += `<h3>전문가를 위한 정보</h3>`;
+                continue; // Skip adding the original title tag to avoid duplicate styling
+            }
+            
+            if (foundStart) {
+                // Accumulate HTML
+                result += element.outerHTML;
+            }
+        }
+        
+        if (!foundStart) {
+            return "<p>전문가를 위한 정보 섹션을 찾을 수 없습니다.</p>";
+        }
+        
+        return result;
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Shared Utils (XHTML Safety)
+    // ------------------------------------------------------------------
+    function ensureXHTML(htmlString) {
+        const doc = new DOMParser().parseFromString(`<div>${htmlString}</div>`, 'text/html');
+        const serializer = new XMLSerializer();
+        let result = "";
         if(doc.body.firstChild) {
             for(let child of doc.body.firstChild.childNodes) {
                 result += serializer.serializeToString(child);
             }
         }
-
-        // POST-CLEAN: Ensure no &nbsp; remains in the output string.
-        // Replace unicode non-breaking space (\u00A0) with &#160;
+        // Replacements for strict XML validity
         return result
             .replace(/&nbsp;/g, "&#160;")
             .replace(/\u00A0/g, "&#160;");
     }
 
-    // ------------------------------------------------------------------
-    // 2. Utils
-    // ------------------------------------------------------------------
     function uuidv4() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
@@ -288,7 +348,7 @@
     }
 
     // ------------------------------------------------------------------
-    // 3. UI Logic
+    // 4. UI Logic
     // ------------------------------------------------------------------
     function addProductRow() {
         const container = document.getElementById('productNameContainer');
@@ -317,7 +377,7 @@
     function removeRow(btn) { btn.closest('tr').remove(); }
 
     // ------------------------------------------------------------------
-    // 4. Enhanced FHIR Generation Logic (With Titles)
+    // 5. FHIR Generation Logic
     // ------------------------------------------------------------------
     function generateXML() {
         // --- Data Gathering ---
@@ -353,7 +413,7 @@
         ingredientHtml += `</tbody></table>`;
         if(!hasIngredients) ingredientHtml = `<h3>원료약품 및 분량</h3><p>정보 없음</p>`;
 
-        // Texts - Added Titles (h3)
+        // Texts (XML)
         const indicationsRaw = document.getElementById('dataIndications').value;
         const indicationsHtml = `<h3>효능효과</h3>` + (indicationsRaw || '<p>정보 없음</p>');
 
@@ -362,6 +422,9 @@
 
         const precautionsRaw = document.getElementById('dataPrecautions').value;
         const precautionsHtml = `<h3>사용상의 주의사항</h3>` + (precautionsRaw || '<p>정보 없음</p>');
+        
+        // Expert Info (HTML)
+        const expertInfoRaw = document.getElementById('dataExpert').value;
         
         // Manual Texts
         const appearanceRaw = escapeHtml(document.getElementById('appearance').value);
@@ -409,7 +472,6 @@
         const addSection = (title, code, textContent, entryRefId = null) => {
             let sectionXml = `<section><title value="${title}"/><code><coding><system value="2.16.840.1.113883.6.1"/><code value="${code}"/><display value="Section"/></coding></code>`;
             if (textContent) {
-                // IMPORTANT: The textContent now contains XHTMLSafe content + h3 headers
                 sectionXml += `<text><div xmlns="http://www.w3.org/1999/xhtml">${textContent}</div></text>`;
             }
             if (entryRefId) {
@@ -425,6 +487,12 @@
         addSection("효능효과", "34067-9", indicationsHtml);
         addSection("용법·용량", "34068-7", dosageHtml);
         addSection("사용상의 주의사항", "43685-7", precautionsHtml);
+        
+        // Insert Expert Info if available (using code for SPL unclassified section or Clinical Pharmacology)
+        if(expertInfoRaw) {
+            addSection("전문가를 위한 정보", "42229-5", expertInfoRaw);
+        }
+
         addSection("포장단위", "34069-5", packagingHtml);
         addSection("저장방법, 사용기간", "44425-7", storageAndShelfLifeHtml);
         addSection("제조원", "42229-5", null, manufOrgId);
