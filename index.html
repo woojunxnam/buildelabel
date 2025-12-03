@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePI FHIR XML Generator (MFDS Compatible - v2.6)</title>
+    <title>ePI FHIR XML Generator (MFDS Compatible - v2.7)</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -11,7 +11,7 @@
         h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 30px; color: #34495e; font-size: 1.2em; }
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9em; }
-        input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1em; }
+        input[type="text"], input[type="date"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1em; }
         input[type="file"] { border: 1px solid #ccc; padding: 10px; width: 100%; background: #fafafa; border-radius: 4px; }
         .file-preview { border: 1px dashed #ccc; padding: 10px; background: #f9f9f9; max-height: 200px; overflow-y: auto; font-size: 0.8em; color: #333; margin-top: 5px; display: none; }
         .file-preview table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
@@ -38,7 +38,7 @@
 <body>
 
 <div class="container">
-    <h1>ePI XML Builder (v2.6)</h1>
+    <h1>ePI XML Builder (v2.7)</h1>
 
     <!-- 1. Basic Info -->
     <h2>기본 정보 (Author/Organization)</h2>
@@ -126,7 +126,7 @@
     <!-- NEW SECTION: Expert Info HTML Upload -->
     <div class="form-group" style="background: #eef2f5; padding: 15px; border-radius: 5px;">
         <label>전문가를 위한 정보 (HTML 파일 업로드) [선택사항]</label>
-        <p style="font-size:0.8em; color:#666; margin-top:-5px;">* 전체 HTML 파일에서 '전문가를 위한 정보' 항목부터 끝까지 자동으로 추출하며, 표 테두리를 자동으로 적용합니다.</p>
+        <p style="font-size:0.8em; color:#666; margin-top:-5px;">* 전체 HTML 파일에서 '전문가를 위한 정보' 항목부터 끝까지 자동으로 추출하여 <b>사용상의 주의사항</b> 하단에 추가합니다.</p>
         <input type="file" id="fileExpert" accept=".html,.htm" onchange="handleHtmlUpload(this, 'previewExpert')">
         <div id="previewExpert" class="file-preview html-extract-preview"></div>
         <input type="hidden" id="dataExpert">
@@ -151,6 +151,11 @@
     <div class="form-group">
         <label>기타 안내사항</label>
         <textarea id="otherInfo" style="height:80px;" placeholder="기타 정보를 입력하세요"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label>개정연월일</label>
+        <input type="date" id="revisionDate">
     </div>
 
     <!-- 4. Manufacturing Info -->
@@ -307,10 +312,9 @@
         return resultHtml;
     }
 
-    // New Helper: Finds tables in HTML string and forces border attributes
+    // Finds tables in HTML string and forces border attributes
     function applyTableStyles(htmlFragment) {
         const parser = new DOMParser();
-        // Wrap in div so we don't lose siblings
         const doc = parser.parseFromString(`<div>${htmlFragment}</div>`, "text/html");
         
         const tables = doc.querySelectorAll("table");
@@ -447,11 +451,16 @@
         const dosageRaw = document.getElementById('dataDosage').value;
         const dosageHtml = `<h3>용법용량</h3>` + (dosageRaw || '<p>정보 없음</p>');
 
+        // Precautions & Expert Info Merge
         const precautionsRaw = document.getElementById('dataPrecautions').value;
-        const precautionsHtml = `<h3>사용상의 주의사항</h3>` + (precautionsRaw || '<p>정보 없음</p>');
-        
-        // Expert Info (HTML)
         const expertInfoRaw = document.getElementById('dataExpert').value;
+        
+        // Append Expert Info to Precautions content if it exists
+        let precautionsCombinedHtml = `<h3>사용상의 주의사항</h3>` + (precautionsRaw || '<p>정보 없음</p>');
+        if (expertInfoRaw) {
+            // expertInfoRaw already includes the <h3> header from the extractor
+            precautionsCombinedHtml += expertInfoRaw;
+        }
         
         // Manual Texts
         const appearanceRaw = escapeHtml(document.getElementById('appearance').value);
@@ -466,6 +475,9 @@
 
         const otherInfoRaw = document.getElementById('otherInfo').value;
         const otherInfoHtml = `<h3>기타 안내사항</h3>` + (otherInfoRaw ? `<p>${escapeHtml(otherInfoRaw)}</p>` : "<p>정보 없음</p>");
+
+        const revisionDateRaw = document.getElementById('revisionDate').value;
+        const revisionDateHtml = `<h3>개정연월일</h3><p>${escapeHtml(revisionDateRaw)}</p>`;
 
         const manufName = document.getElementById('manufacturer').value.trim() || orgName;
         const importerName = document.getElementById('importer').value.trim();
@@ -496,8 +508,8 @@
         // 1. COMPOSITION Entry
         let sections = [];
         
-        const addSection = (title, code, textContent, entryRefId = null) => {
-            let sectionXml = `<section><title value="${title}"/><code><coding><system value="2.16.840.1.113883.6.1"/><code value="${code}"/><display value="Section"/></coding></code>`;
+        const addSection = (title, code, display, textContent, entryRefId = null) => {
+            let sectionXml = `<section><title value="${title}"/><code><coding><system value="2.16.840.1.113883.6.1"/><code value="${code}"/><display value="${display}"/></coding></code>`;
             if (textContent) {
                 sectionXml += `<text><div xmlns="http://www.w3.org/1999/xhtml">${textContent}</div></text>`;
             }
@@ -508,27 +520,25 @@
             sections.push(sectionXml);
         };
 
-        addSection("제품명", "69718-5", productNameHtml);
-        addSection("성상", "34089-3", appearanceHtml);
-        addSection("원료약품 및 그 분량", "34089-3", ingredientHtml);
-        addSection("효능효과", "34067-9", indicationsHtml);
-        addSection("용법·용량", "34068-7", dosageHtml);
-        addSection("사용상의 주의사항", "43685-7", precautionsHtml);
+        // Updated Order and Codes
+        addSection("제품명", "69718-5", "Statement of identity section", productNameHtml);
+        addSection("성상", "34089-3", "Description section", appearanceHtml);
+        addSection("원료약품 및 그 분량", "34089-3", "Description section", ingredientHtml);
+        addSection("효능효과", "34067-9", "Indications and usage section", indicationsHtml);
+        addSection("용법·용량", "34068-7", "Dosage and administration section", dosageHtml);
+        addSection("사용상의 주의사항", "43685-7", "Warnings and precautions section", precautionsCombinedHtml); // Merged content
+        addSection("포장단위", "34069-5", "How supplied section", packagingHtml);
+        addSection("저장방법, 사용기간", "44425-7", "Storage and handling section", storageAndShelfLifeHtml);
         
-        // Insert Expert Info if available
-        if(expertInfoRaw) {
-            addSection("전문가를 위한 정보", "42229-5", expertInfoRaw);
-        }
-
-        addSection("포장단위", "34069-5", packagingHtml);
-        addSection("저장방법, 사용기간", "44425-7", storageAndShelfLifeHtml);
-        addSection("제조원", "42229-5", null, manufOrgId);
+        // Updated Order: Manuf -> Importer -> Other -> Revision Date
+        addSection("제조원", "42229-5", "SPL unclassified section", null, manufOrgId);
         
         if (importerOrgId) {
-            addSection("수입자", "42229-5", null, importerOrgId);
+            addSection("수입자", "42229-5", "SPL unclassified section", null, importerOrgId);
         }
 
-        addSection("기타 안내사항", "42229-5", otherInfoHtml);
+        addSection("기타 안내사항", "42229-5", "SPL unclassified section", otherInfoHtml);
+        addSection("개정연월일", "42229-5", "SPL unclassified section", revisionDateHtml);
 
         const compositionXml = `
     <entry>
