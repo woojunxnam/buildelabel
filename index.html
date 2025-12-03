@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ePI FHIR XML Generator</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+        h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 30px; color: #34495e; font-size: 1.2em; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em; }
+        input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1em; }
+        textarea { height: 100px; resize: vertical; }
+        
+        .row-container { margin-bottom: 10px; display: flex; gap: 10px; }
+        .btn-add { background-color: #3498db; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; margin-bottom: 10px; }
+        .btn-remove { background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        
+        .action-area { margin-top: 40px; text-align: center; padding-top: 20px; border-top: 2px solid #eee; }
+        .btn-generate { background-color: #27ae60; color: white; border: none; padding: 15px 30px; font-size: 1.1em; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
+        .btn-generate:hover { background-color: #219150; }
+
+        .hint { font-size: 0.8em; color: #7f8c8d; margin-top: -10px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>ePI XML Builder</h1>
+
+    <!-- 1. Basic Info -->
+    <h2>기본 정보 (Author/Organization)</h2>
+    <div class="form-group">
+        <label for="orgName">업체명 (작성자/소유자)</label>
+        <input type="text" id="orgName" placeholder="예: 한국제약 주식회사">
+    </div>
+    <div class="form-group">
+        <label for="externalId">외부 식별자 (External ID)</label>
+        <input type="text" id="externalId" placeholder="예: KR-12345678">
+    </div>
+
+    <!-- 2. Product Names (Dynamic Rows) -->
+    <h2>제품명</h2>
+    <div id="productNameContainer">
+        <div class="row-container">
+            <input type="text" class="product-name-input" placeholder="제품명 입력">
+        </div>
+    </div>
+    <button type="button" class="btn-add" onclick="addProductRow()">+ 제품명 추가</button>
+    <p class="hint">공통으로 e-라벨을 사용하는 경우 제품명을 추가하세요.</p>
+
+    <!-- 3. Detail Inputs -->
+    <h2>상세 정보</h2>
+    
+    <div class="form-group">
+        <label>성상</label>
+        <textarea id="appearance" placeholder="성상을 입력하세요"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label>원료약품 및 분량 **</label>
+        <textarea id="ingredients" placeholder="내용을 입력하세요"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label>효능효과 **</label>
+        <textarea id="indications" placeholder="내용을 입력하세요"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label>용법용량 **</label>
+        <textarea id="dosage" placeholder="내용을 입력하세요"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label>사용상의 주의사항 **</label>
+        <textarea id="precautions" placeholder="내용을 입력하세요"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label>포장단위</label>
+        <input type="text" id="packaging" placeholder="예: 30정/병">
+    </div>
+
+    <div class="form-group">
+        <label>저장방법</label>
+        <input type="text" id="storage" placeholder="예: 기밀용기, 실온보관">
+    </div>
+
+    <div class="form-group">
+        <label>사용기간</label>
+        <input type="text" id="shelfLife" placeholder="예: 제조일로부터 36개월">
+    </div>
+
+    <div class="form-group">
+        <label>기타 안내사항</label>
+        <textarea id="otherInfo" placeholder="기타 정보를 입력하세요"></textarea>
+    </div>
+
+    <!-- 4. Manufacturing Info -->
+    <h2>제조/수입 정보</h2>
+    <div class="form-group">
+        <label>제조원 (업체명)</label>
+        <input type="text" id="manufacturer" placeholder="제조원 업체명">
+    </div>
+    <div class="form-group">
+        <label>수입자 (업체명)</label>
+        <input type="text" id="importer" placeholder="수입자 업체명 (해당 없을 시 공란)">
+    </div>
+
+    <!-- Action -->
+    <div class="action-area">
+        <button type="button" class="btn-generate" onclick="generateXML()">FHIR XML 생성 및 다운로드</button>
+    </div>
+</div>
+
+<script>
+    // 1. Helper: Generate UUID v4
+    function uuidv4() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    // 2. Helper: Get Current ISO Date/Time
+    function getIsoTimestamp() {
+        return new Date().toISOString();
+    }
+
+    function getCurrentDate() {
+        return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    }
+
+    // 3. Helper: Escape HTML for XML content
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;")
+            .replace(/\n/g, "<br/>"); // Convert newlines to breaks for XHTML display
+    }
+
+    // 4. UI: Add Product Name Row
+    function addProductRow() {
+        const container = document.getElementById('productNameContainer');
+        const div = document.createElement('div');
+        div.className = 'row-container';
+        div.innerHTML = `
+            <input type="text" class="product-name-input" placeholder="추가 제품명 입력">
+            <button type="button" class="btn-remove" onclick="this.parentElement.remove()">삭제</button>
+        `;
+        container.appendChild(div);
+    }
+
+    // 5. Main: Generate XML
+    function generateXML() {
+        // Collect Data
+        const orgName = document.getElementById('orgName').value || 'Unknown Organization';
+        const externalId = document.getElementById('externalId').value || 'UNKNOWN-ID';
+        
+        // Product Names
+        const productInputs = document.querySelectorAll('.product-name-input');
+        let productNamesList = [];
+        productInputs.forEach(input => {
+            if(input.value.trim()) productNamesList.push(input.value.trim());
+        });
+        const mainTitle = productNamesList.length > 0 ? productNamesList[0] : 'Product Name';
+        // HTML content for Product Name section
+        const productNameHtml = productNamesList.map(name => `<p>${escapeHtml(name)}</p>`).join('');
+
+        // Text Fields
+        const appearance = escapeHtml(document.getElementById('appearance').value);
+        const ingredients = escapeHtml(document.getElementById('ingredients').value);
+        const indications = escapeHtml(document.getElementById('indications').value);
+        const dosage = escapeHtml(document.getElementById('dosage').value);
+        const precautions = escapeHtml(document.getElementById('precautions').value);
+        const packaging = escapeHtml(document.getElementById('packaging').value);
+        const storage = escapeHtml(document.getElementById('storage').value);
+        const shelfLife = escapeHtml(document.getElementById('shelfLife').value);
+        const otherInfo = escapeHtml(document.getElementById('otherInfo').value);
+        
+        // Organizations
+        const manufName = document.getElementById('manufacturer').value || orgName;
+        const importerName = document.getElementById('importer').value || '';
+
+        // Generate UUIDs for this session
+        const bundleId = uuidv4();
+        const compositionId = uuidv4();
+        const authorOrgId = uuidv4();
+        const manufOrgId = uuidv4();
+        const importerOrgId = uuidv4();
+        
+        const timestamp = getIsoTimestamp();
+        const dateOnly = getCurrentDate();
+
+        // ---------------------------------------------------------
+        // Construct XML
+        // NOTE: We insert "Appearance" (성상) as a section or part of Description based on logic.
+        // I will add a specific section for Appearance using standard LOINC if possible, 
+        // or insert it into the logic structure provided.
+        // ---------------------------------------------------------
+
+        let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<Bundle xmlns="http://hl7.org/fhir">
+  <!-- Stable UUID for the Bundle -->
+  <id value="${bundleId}"/>
+
+  <!-- Metadata -->
+  <meta>
+    <versionId value="1"/>
+    <lastUpdated value="${timestamp}"/>
+    <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Bundle-uv-epi"/>
+  </meta>
+
+  <language value="ko"/>
+
+  <identifier>
+    <system value="https://mfds.go.kr/fhir/epiGuid"/>
+    <value value="${escapeHtml(externalId)}"/>
+  </identifier>
+
+  <type value="document"/>
+  <timestamp value="${timestamp}"/>
+
+  <!-- Composition (Document Body) -->
+  <entry>
+    <fullUrl value="urn:uuid:${compositionId}"/>
+    <resource>
+      <Composition>
+        <id value="${compositionId}"/>
+        <meta>
+          <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Composition-uv-epi"/>
+        </meta>
+        <status value="final"/>
+        <type>
+          <coding>
+            <system value="2.16.840.1.113883.6.1"/>
+            <code value="60591-5"/>
+            <display value="Summary of Product Characteristics"/>
+          </coding>
+        </type>
+        <title value="${escapeHtml(mainTitle)}"/>
+        <date value="${dateOnly}"/>
+        <author>
+          <reference value="urn:uuid:${authorOrgId}"/>
+        </author>
+        <language value="ko"/>
+
+        <!-- Section: 제품명 -->
+        <section>
+          <title value="제품명"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="69718-5"/>
+              <display value="Statement of identity section"/>
+            </coding>
+          </code>
+          <text>
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              ${productNameHtml}
+            </div>
+          </text>
+        </section>
+
+        <!-- Section: 성상 (Appearance) - Added as separate section for clarity -->
+        <section>
+          <title value="성상"/>
+          <code>
+             <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="34089-3"/>
+              <display value="Description section"/>
+            </coding>
+          </code>
+          <text>
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              <p>${appearance}</p>
+            </div>
+          </text>
+        </section>
+
+        <!-- Section: 원료약품 및 그 분량 -->
+        <section>
+          <title value="원료약품 및 그 분량"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="34089-3"/>
+              <display value="Description section"/>
+            </coding>
+          </code>
+          <text>
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              ${ingredients}
+            </div>
+          </text>
+        </section>
+
+        <!-- Section: 효능효과 -->
+        <section>
+          <title value="효능효과"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="34067-9"/>
+              <display value="Indications and usage section"/>
+            </coding>
+          </code>
+          <text>
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              ${indications}
+            </div>
+          </text>
+        </section>
+
+        <!-- Section: 용법·용량 -->
+        <section>
+          <title value="용법·용량"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="34068-7"/>
+              <display value="Dosage and administration section"/>
+            </coding>
+          </code>
+          <text>
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              ${dosage}
+            </div>
+          </text>
+        </section>
+
+        <!-- Section: 사용상의 주의사항 -->
+        <section>
+          <title value="사용상의 주의사항"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="43685-7"/>
+              <display value="Warnings and precautions section"/>
+            </coding>
+          </code>
+          <text>
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              ${precautions}
+            </div>
+          </text>
+        </section>
+
+        <!-- Section: 포장단위 -->
+        <section>
+          <title value="포장단위"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="34069-5"/>
+              <display value="How supplied section"/>
+            </coding>
+          </code>
+          <text>
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              <p>${packaging}</p>
+            </div>
+          </text>
+        </section>
+
+        <!-- Section: 저장방법, 사용기간 -->
+        <section>
+          <title value="저장방법, 사용기간"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="44425-7"/>
+              <display value="Storage and handling section"/>
+            </coding>
+          </code>
+          <text>
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              <p><strong>저장방법:</strong> ${storage}</p>
+              <p><strong>사용기간:</strong> ${shelfLife}</p>
+            </div>
+          </text>
+        </section>
+
+        <!-- Section: 제조원 (Reference) -->
+        <section>
+          <title value="제조원"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="42229-5"/>
+              <display value="SPL unclassified section"/>
+            </coding>
+          </code>
+          <entry>
+            <reference value="urn:uuid:${manufOrgId}"/>
+          </entry>
+        </section>
+
+        <!-- Section: 수입자 (Reference) -->
+        <section>
+          <title value="수입자"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="42229-5"/>
+              <display value="SPL unclassified section"/>
+            </coding>
+          </code>
+          <entry>
+             <reference value="urn:uuid:${importerOrgId}"/>
+          </entry>
+        </section>
+
+        <!-- Section: 기타 안내사항 -->
+        <section>
+          <title value="기타 안내사항"/>
+          <code>
+            <coding>
+              <system value="2.16.840.1.113883.6.1"/>
+              <code value="42229-5"/>
+              <display value="SPL unclassified section"/>
+            </coding>
+          </code>
+          <text>
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              ${otherInfo}
+            </div>
+          </text>
+        </section>
+
+      </Composition>
+    </resource>
+  </entry>
+
+  <!-- Organization 1: Author (The company filling this out) -->
+  <entry>
+    <fullUrl value="urn:uuid:${authorOrgId}"/>
+    <resource>
+      <Organization>
+        <id value="${authorOrgId}"/>
+        <meta>
+          <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/>
+        </meta>
+        <name value="${escapeHtml(orgName)}"/>
+      </Organization>
+    </resource>
+  </entry>
+
+  <!-- Organization 2: Manufacturer -->
+  <entry>
+    <fullUrl value="urn:uuid:${manufOrgId}"/>
+    <resource>
+      <Organization>
+        <id value="${manufOrgId}"/>
+        <meta>
+          <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/>
+        </meta>
+        <name value="${escapeHtml(manufName)}"/>
+      </Organization>
+    </resource>
+  </entry>
+
+  <!-- Organization 3: Importer -->
+  <entry>
+    <fullUrl value="urn:uuid:${importerOrgId}"/>
+    <resource>
+      <Organization>
+        <id value="${importerOrgId}"/>
+        <meta>
+          <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/>
+        </meta>
+        <name value="${escapeHtml(importerName)}"/>
+      </Organization>
+    </resource>
+  </entry>
+
+</Bundle>`;
+
+        downloadFile("epi-document.xml", xmlContent);
+    }
+
+    // 6. Helper: Download Trigger
+    function downloadFile(filename, content) {
+        const element = document.createElement('a');
+        const blob = new Blob([content], {type: 'text/xml'});
+        element.href = URL.createObjectURL(blob);
+        element.download = filename;
+        document.body.appendChild(element);
+        element.click();
+        document.body.removeChild(element);
+    }
+</script>
+
+</body>
+</html>
