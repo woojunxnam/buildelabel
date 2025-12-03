@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePI FHIR XML Generator (MFDS Compatible - v2.7)</title>
+    <title>ePI FHIR XML Generator (MFDS Compatible - v2.8)</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -38,7 +38,7 @@
 <body>
 
 <div class="container">
-    <h1>ePI XML Builder (v2.7)</h1>
+    <h1>ePI XML Builder (v2.8)</h1>
 
     <!-- 1. Basic Info -->
     <h2>기본 정보 (Author/Organization)</h2>
@@ -186,7 +186,6 @@
         const reader = new FileReader();
         reader.onload = function(e) {
             let xmlContent = e.target.result;
-            // Pre-clean entities
             xmlContent = xmlContent.replace(/&nbsp;/g, "&#160;");
 
             const rawHtml = parseMfdsXmlToHtml(xmlContent);
@@ -214,7 +213,6 @@
                 let text = paragraphs[j].textContent.trim();
                 if (!text) continue;
 
-                // Check for Tables
                 const hasTbody = text.includes('<tbody');
                 const hasTable = text.includes('<table');
                 
@@ -262,19 +260,14 @@
         reader.onload = function(e) {
             let htmlContent = e.target.result;
             
-            // 1. Extract text
             let extractedHtml = extractExpertInfo(htmlContent);
-            // 2. Force Table Styles
             extractedHtml = applyTableStyles(extractedHtml);
-            // 3. Sanitize to XHTML
             const safeHtml = ensureXHTML(extractedHtml);
 
-            // Preview
             const previewDiv = document.getElementById(previewId);
             previewDiv.style.display = 'block';
             previewDiv.innerHTML = safeHtml;
             
-            // Store
             const hiddenInputId = inputElement.id.replace('file', 'data'); 
             document.getElementById(hiddenInputId).value = safeHtml;
         };
@@ -294,7 +287,6 @@
             const element = bodyChildren[i];
             const text = element.textContent.trim().replace(/\s/g, ''); 
             
-            // Check for trigger phrase
             if (!foundStart && text.includes("전문가를위한정보")) {
                 foundStart = true;
                 resultHtml += `<h3>전문가를 위한 정보</h3>`;
@@ -312,24 +304,20 @@
         return resultHtml;
     }
 
-    // Finds tables in HTML string and forces border attributes
     function applyTableStyles(htmlFragment) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(`<div>${htmlFragment}</div>`, "text/html");
         
         const tables = doc.querySelectorAll("table");
         tables.forEach(tbl => {
-            // Force attributes for XML viewers
             tbl.setAttribute("border", "1");
             tbl.setAttribute("cellspacing", "0");
             tbl.setAttribute("cellpadding", "5");
             
-            // Add inline styles for browser/modern viewers
             tbl.style.borderCollapse = "collapse";
             tbl.style.width = "100%";
             tbl.style.marginTop = "10px";
 
-            // Also force borders on cells to be sure
             const cells = tbl.querySelectorAll("td, th");
             cells.forEach(cell => {
                 cell.style.border = "1px solid #ccc";
@@ -352,7 +340,6 @@
                 result += serializer.serializeToString(child);
             }
         }
-        // Replacements for strict XML validity
         return result
             .replace(/&nbsp;/g, "&#160;")
             .replace(/\u00A0/g, "&#160;");
@@ -411,7 +398,6 @@
     // 5. FHIR Generation Logic
     // ------------------------------------------------------------------
     function generateXML() {
-        // --- Data Gathering ---
         const orgName = document.getElementById('orgName').value.trim() || 'Unknown Organization';
         const externalId = document.getElementById('externalId').value.trim() || 'UNKNOWN-ID';
         
@@ -451,14 +437,12 @@
         const dosageRaw = document.getElementById('dataDosage').value;
         const dosageHtml = `<h3>용법용량</h3>` + (dosageRaw || '<p>정보 없음</p>');
 
-        // Precautions & Expert Info Merge
+        // Precautions & Expert Info
         const precautionsRaw = document.getElementById('dataPrecautions').value;
         const expertInfoRaw = document.getElementById('dataExpert').value;
         
-        // Append Expert Info to Precautions content if it exists
         let precautionsCombinedHtml = `<h3>사용상의 주의사항</h3>` + (precautionsRaw || '<p>정보 없음</p>');
         if (expertInfoRaw) {
-            // expertInfoRaw already includes the <h3> header from the extractor
             precautionsCombinedHtml += expertInfoRaw;
         }
         
@@ -482,7 +466,7 @@
         const manufName = document.getElementById('manufacturer').value.trim() || orgName;
         const importerName = document.getElementById('importer').value.trim();
 
-        // --- ID Management ---
+        // IDs
         const bundleId = uuidv4();
         const compositionId = uuidv4();
         const timestamp = getIsoTimestamp();
@@ -504,8 +488,6 @@
 
         // --- Build XML ---
         let bundleEntries = [];
-
-        // 1. COMPOSITION Entry
         let sections = [];
         
         const addSection = (title, code, display, textContent, entryRefId = null) => {
@@ -520,21 +502,21 @@
             sections.push(sectionXml);
         };
 
-        // Updated Order and Codes
         addSection("제품명", "69718-5", "Statement of identity section", productNameHtml);
         addSection("성상", "34089-3", "Description section", appearanceHtml);
         addSection("원료약품 및 그 분량", "34089-3", "Description section", ingredientHtml);
         addSection("효능효과", "34067-9", "Indications and usage section", indicationsHtml);
         addSection("용법·용량", "34068-7", "Dosage and administration section", dosageHtml);
-        addSection("사용상의 주의사항", "43685-7", "Warnings and precautions section", precautionsCombinedHtml); // Merged content
+        addSection("사용상의 주의사항", "43685-7", "Warnings and precautions section", precautionsCombinedHtml);
         addSection("포장단위", "34069-5", "How supplied section", packagingHtml);
         addSection("저장방법, 사용기간", "44425-7", "Storage and handling section", storageAndShelfLifeHtml);
         
-        // Updated Order: Manuf -> Importer -> Other -> Revision Date
-        addSection("제조원", "42229-5", "SPL unclassified section", null, manufOrgId);
+        // Add Manufacturer Narrative and Reference
+        addSection("제조원", "42229-5", "SPL unclassified section", `<p>${escapeHtml(manufName)}</p>`, manufOrgId);
         
+        // Add Importer Narrative and Reference
         if (importerOrgId) {
-            addSection("수입자", "42229-5", "SPL unclassified section", null, importerOrgId);
+            addSection("수입자", "42229-5", "SPL unclassified section", `<p>${escapeHtml(importerName)}</p>`, importerOrgId);
         }
 
         addSection("기타 안내사항", "42229-5", "SPL unclassified section", otherInfoHtml);
@@ -559,7 +541,7 @@
     </entry>`;
         bundleEntries.push(compositionXml);
 
-        // 2. ORGANIZATION Entries
+        // Organization Entries
         for (const [name, id] of Object.entries(orgRegistry)) {
             const orgXml = `
     <entry>
@@ -575,7 +557,7 @@
             bundleEntries.push(orgXml);
         }
 
-        // --- Final Assembly ---
+        // Final Assembly
         let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <Bundle xmlns="http://hl7.org/fhir">
   <id value="${bundleId}"/>
