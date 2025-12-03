@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePI FHIR XML Generator (MFDS Compatible - v2.8)</title>
+    <title>ePI Generator (XML & HTML) - v2.9</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -29,7 +29,7 @@
         .btn-generate { background-color: #27ae60; color: white; border: none; padding: 15px 30px; font-size: 1.1em; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
         .btn-generate:hover { background-color: #219150; }
         
-        /* Ensure preview looks like the final output */
+        /* HTML Extract Preview */
         .html-extract-preview table { border: 1px solid #ccc; border-collapse: collapse; width: 100%; }
         .html-extract-preview td, .html-extract-preview th { border: 1px solid #ccc; padding: 5px; }
         .html-extract-preview img { max-width: 100%; height: auto; }
@@ -38,7 +38,7 @@
 <body>
 
 <div class="container">
-    <h1>ePI XML Builder (v2.8)</h1>
+    <h1>ePI Generator (XML & HTML)</h1>
 
     <!-- 1. Basic Info -->
     <h2>기본 정보 (Author/Organization)</h2>
@@ -46,10 +46,7 @@
         <label for="orgName">업체명 (작성자/소유자)</label>
         <input type="text" id="orgName" placeholder="예: 한국제약 주식회사">
     </div>
-    <div class="form-group">
-        <label for="externalId">외부 식별자 (External ID)</label>
-        <input type="text" id="externalId" placeholder="예: KR-12345678">
-    </div>
+    <!-- Removed External ID input -->
 
     <!-- 2. Product Names -->
     <h2>제품명</h2>
@@ -123,10 +120,10 @@
         <input type="hidden" id="dataPrecautions">
     </div>
 
-    <!-- NEW SECTION: Expert Info HTML Upload -->
+    <!-- Expert Info HTML Upload -->
     <div class="form-group" style="background: #eef2f5; padding: 15px; border-radius: 5px;">
         <label>전문가를 위한 정보 (HTML 파일 업로드) [선택사항]</label>
-        <p style="font-size:0.8em; color:#666; margin-top:-5px;">* 전체 HTML 파일에서 '전문가를 위한 정보' 항목부터 끝까지 자동으로 추출하여 <b>사용상의 주의사항</b> 하단에 추가합니다.</p>
+        <p style="font-size:0.8em; color:#666; margin-top:-5px;">* 전체 HTML 파일에서 '전문가를 위한 정보' 항목부터 끝까지 자동으로 추출합니다.</p>
         <input type="file" id="fileExpert" accept=".html,.htm" onchange="handleHtmlUpload(this, 'previewExpert')">
         <div id="previewExpert" class="file-preview html-extract-preview"></div>
         <input type="hidden" id="dataExpert">
@@ -148,17 +145,7 @@
         <input type="text" id="shelfLife" placeholder="예: 제조일로부터 36개월">
     </div>
 
-    <div class="form-group">
-        <label>기타 안내사항</label>
-        <textarea id="otherInfo" style="height:80px;" placeholder="기타 정보를 입력하세요"></textarea>
-    </div>
-
-    <div class="form-group">
-        <label>개정연월일</label>
-        <input type="date" id="revisionDate">
-    </div>
-
-    <!-- 4. Manufacturing Info -->
+    <!-- 4. Manufacturing Info (MOVED UP) -->
     <h2>제조/수입 정보</h2>
     <div class="form-group">
         <label>제조원 (업체명)</label>
@@ -169,33 +156,37 @@
         <input type="text" id="importer" placeholder="수입자 업체명 (해당 없을 시 공란)">
     </div>
 
+    <!-- Other Info (MOVED DOWN) -->
+    <div class="form-group">
+        <label>기타 안내사항</label>
+        <textarea id="otherInfo" style="height:80px;" placeholder="기타 정보를 입력하세요"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label>개정연월일</label>
+        <input type="date" id="revisionDate">
+    </div>
+
     <!-- Action -->
     <div class="action-area">
-        <button type="button" class="btn-generate" onclick="generateXML()">FHIR XML 생성 및 다운로드</button>
+        <button type="button" class="btn-generate" onclick="generateAndDownload()">HTML & XML 생성 및 다운로드</button>
     </div>
 </div>
 
 <script>
     // ------------------------------------------------------------------
-    // 1. Parsing Logic - XML
+    // 1. Parsing Logic
     // ------------------------------------------------------------------
     function handleXmlUpload(inputElement, previewId) {
         const file = inputElement.files[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = function(e) {
-            let xmlContent = e.target.result;
-            xmlContent = xmlContent.replace(/&nbsp;/g, "&#160;");
-
+            let xmlContent = e.target.result.replace(/&nbsp;/g, "&#160;");
             const rawHtml = parseMfdsXmlToHtml(xmlContent);
-            
-            const previewDiv = document.getElementById(previewId);
-            previewDiv.style.display = 'block';
-            previewDiv.innerHTML = rawHtml; 
-            
-            const hiddenInputId = inputElement.id.replace('file', 'data'); 
-            document.getElementById(hiddenInputId).value = rawHtml;
+            document.getElementById(previewId).innerHTML = rawHtml; 
+            document.getElementById(previewId).style.display = 'block';
+            document.getElementById(inputElement.id.replace('file', 'data')).value = rawHtml;
         };
         reader.readAsText(file);
     }
@@ -203,7 +194,6 @@
     function parseMfdsXmlToHtml(xmlString) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, "text/xml");
-        
         let htmlOutput = "";
         const articles = xmlDoc.getElementsByTagName("ARTICLE");
         
@@ -212,64 +202,43 @@
             for (let j = 0; j < paragraphs.length; j++) {
                 let text = paragraphs[j].textContent.trim();
                 if (!text) continue;
-
-                const hasTbody = text.includes('<tbody');
-                const hasTable = text.includes('<table');
-                
-                if (hasTbody || hasTable || text.includes('<tr')) {
-                    if (!hasTable) {
-                        text = `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse: collapse; width: 100%; margin-top: 10px;">${text}</table>`;
-                    }
+                const isTable = text.includes('<tbody') || text.includes('<table');
+                if (isTable) {
+                    if (!text.includes('<table')) text = `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse: collapse; width: 100%; margin-top: 10px;">${text}</table>`;
                     chunkHtml += `<div>${ensureXHTML(text)}</div>`;
                 } else {
                     const lower = text.toLowerCase();
-                    if (lower.startsWith('<p') || lower.startsWith('<div')) {
-                        chunkHtml += ensureXHTML(text);
-                    } else {
-                        chunkHtml += `<p>${ensureXHTML(text)}</p>`;
-                    }
+                    if (lower.startsWith('<p') || lower.startsWith('<div')) chunkHtml += ensureXHTML(text);
+                    else chunkHtml += `<p>${ensureXHTML(text)}</p>`;
                 }
             }
             return chunkHtml;
         };
-
         if (articles.length > 0) {
             for (let i = 0; i < articles.length; i++) {
                 const article = articles[i];
                 const title = article.getAttribute("title");
                 if (title) htmlOutput += `<h4>${escapeHtml(title)}</h4>`;
-                
-                const paragraphs = article.getElementsByTagName("PARAGRAPH");
-                htmlOutput += processParagraphs(paragraphs);
+                htmlOutput += processParagraphs(article.getElementsByTagName("PARAGRAPH"));
             }
         } else {
-            const paragraphs = xmlDoc.getElementsByTagName("PARAGRAPH");
-            htmlOutput += processParagraphs(paragraphs);
+            htmlOutput += processParagraphs(xmlDoc.getElementsByTagName("PARAGRAPH"));
         }
         return htmlOutput;
     }
 
-    // ------------------------------------------------------------------
-    // 2. Parsing Logic - HTML (Expert Info)
-    // ------------------------------------------------------------------
     function handleHtmlUpload(inputElement, previewId) {
         const file = inputElement.files[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = function(e) {
             let htmlContent = e.target.result;
-            
             let extractedHtml = extractExpertInfo(htmlContent);
             extractedHtml = applyTableStyles(extractedHtml);
             const safeHtml = ensureXHTML(extractedHtml);
-
-            const previewDiv = document.getElementById(previewId);
-            previewDiv.style.display = 'block';
-            previewDiv.innerHTML = safeHtml;
-            
-            const hiddenInputId = inputElement.id.replace('file', 'data'); 
-            document.getElementById(hiddenInputId).value = safeHtml;
+            document.getElementById(previewId).innerHTML = safeHtml;
+            document.getElementById(previewId).style.display = 'block';
+            document.getElementById(inputElement.id.replace('file', 'data')).value = safeHtml;
         };
         reader.readAsText(file);
     }
@@ -277,131 +246,89 @@
     function extractExpertInfo(fullHtml) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(fullHtml, "text/html");
-        
         let foundStart = false;
         let resultHtml = "";
-        
         const bodyChildren = doc.body.children;
-        
         for (let i = 0; i < bodyChildren.length; i++) {
             const element = bodyChildren[i];
             const text = element.textContent.trim().replace(/\s/g, ''); 
-            
             if (!foundStart && text.includes("전문가를위한정보")) {
                 foundStart = true;
                 resultHtml += `<h3>전문가를 위한 정보</h3>`;
                 continue; 
             }
-            
-            if (foundStart) {
-                resultHtml += element.outerHTML;
-            }
+            if (foundStart) resultHtml += element.outerHTML;
         }
-        
-        if (!foundStart) {
-            return "<p>전문가를 위한 정보 섹션을 찾을 수 없습니다.</p>";
-        }
-        return resultHtml;
+        return foundStart ? resultHtml : "<p>전문가를 위한 정보 섹션을 찾을 수 없습니다.</p>";
     }
 
     function applyTableStyles(htmlFragment) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(`<div>${htmlFragment}</div>`, "text/html");
-        
-        const tables = doc.querySelectorAll("table");
-        tables.forEach(tbl => {
+        doc.querySelectorAll("table").forEach(tbl => {
             tbl.setAttribute("border", "1");
             tbl.setAttribute("cellspacing", "0");
             tbl.setAttribute("cellpadding", "5");
-            
             tbl.style.borderCollapse = "collapse";
             tbl.style.width = "100%";
             tbl.style.marginTop = "10px";
-
-            const cells = tbl.querySelectorAll("td, th");
-            cells.forEach(cell => {
+            tbl.querySelectorAll("td, th").forEach(cell => {
                 cell.style.border = "1px solid #ccc";
                 cell.style.padding = "5px";
             });
         });
-
         return doc.body.firstChild.innerHTML;
     }
 
-    // ------------------------------------------------------------------
-    // 3. Shared Utils (XHTML Safety)
-    // ------------------------------------------------------------------
     function ensureXHTML(htmlString) {
         const doc = new DOMParser().parseFromString(`<div>${htmlString}</div>`, 'text/html');
         const serializer = new XMLSerializer();
         let result = "";
         if(doc.body.firstChild) {
-            for(let child of doc.body.firstChild.childNodes) {
-                result += serializer.serializeToString(child);
-            }
+            for(let child of doc.body.firstChild.childNodes) result += serializer.serializeToString(child);
         }
-        return result
-            .replace(/&nbsp;/g, "&#160;")
-            .replace(/\u00A0/g, "&#160;");
+        return result.replace(/&nbsp;/g, "&#160;").replace(/\u00A0/g, "&#160;");
     }
 
+    // ------------------------------------------------------------------
+    // 2. Helpers
+    // ------------------------------------------------------------------
     function uuidv4() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
             return v.toString(16);
         });
     }
-
     function getIsoTimestamp() { return new Date().toISOString(); }
     function getCurrentDate() { return new Date().toISOString().split('T')[0]; }
-
     function escapeHtml(text) {
         if (!text) return '';
-        return text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
 
-    // ------------------------------------------------------------------
-    // 4. UI Logic
-    // ------------------------------------------------------------------
     function addProductRow() {
         const container = document.getElementById('productNameContainer');
         const div = document.createElement('div');
         div.className = 'row-container';
-        div.innerHTML = `
-            <input type="text" class="product-name-input" placeholder="추가 제품명 입력">
-            <button type="button" class="btn-remove" onclick="this.parentElement.remove()">삭제</button>
-        `;
+        div.innerHTML = `<input type="text" class="product-name-input" placeholder="추가 제품명 입력"><button type="button" class="btn-remove" onclick="this.parentElement.remove()">삭제</button>`;
         container.appendChild(div);
     }
-
     function addIngredientRow() {
         const tbody = document.querySelector('#ingTable tbody');
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><input type="text" class="ing-purpose"></td>
-            <td><input type="text" class="ing-name"></td>
-            <td><input type="text" class="ing-qty"></td>
-            <td><input type="text" class="ing-std"></td>
-            <td><button type="button" class="btn-remove" onclick="removeRow(this)">X</button></td>
-        `;
+        tr.innerHTML = `<td><input type="text" class="ing-purpose"></td><td><input type="text" class="ing-name"></td><td><input type="text" class="ing-qty"></td><td><input type="text" class="ing-std"></td><td><button type="button" class="btn-remove" onclick="removeRow(this)">X</button></td>`;
         tbody.appendChild(tr);
     }
-
     function removeRow(btn) { btn.closest('tr').remove(); }
 
     // ------------------------------------------------------------------
-    // 5. FHIR Generation Logic
+    // 3. Main Generation Logic (XML & HTML)
     // ------------------------------------------------------------------
-    function generateXML() {
+    function generateAndDownload() {
         const orgName = document.getElementById('orgName').value.trim() || 'Unknown Organization';
-        const externalId = document.getElementById('externalId').value.trim() || 'UNKNOWN-ID';
         
-        // Product Names
+        // --- Gather Data ---
+        // Product Name
         const productInputs = document.querySelectorAll('.product-name-input');
         let productNamesList = [];
         productInputs.forEach(input => { if(input.value.trim()) productNamesList.push(input.value.trim()); });
@@ -411,10 +338,8 @@
         // Ingredients
         const ingBaseAmount = document.getElementById('ingBaseAmount').value;
         const ingRows = document.querySelectorAll('#ingTable tbody tr');
-        let ingredientHtml = `<h3>원료약품 및 분량</h3>`; 
-        
+        let ingredientHtml = `<h3>원료약품 및 분량</h3>`;
         if(ingBaseAmount) ingredientHtml += `<p>이 약 ${escapeHtml(ingBaseAmount)} 중</p>`;
-        
         ingredientHtml += `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse: collapse;"><thead><tr style="background-color:#f0f0f0;"><th>배합목적</th><th>원료명</th><th>분량</th><th>규격</th></tr></thead><tbody>`;
         let hasIngredients = false;
         ingRows.forEach(row => {
@@ -430,36 +355,20 @@
         ingredientHtml += `</tbody></table>`;
         if(!hasIngredients) ingredientHtml = `<h3>원료약품 및 분량</h3><p>정보 없음</p>`;
 
-        // Texts (XML)
-        const indicationsRaw = document.getElementById('dataIndications').value;
-        const indicationsHtml = `<h3>효능효과</h3>` + (indicationsRaw || '<p>정보 없음</p>');
-
-        const dosageRaw = document.getElementById('dataDosage').value;
-        const dosageHtml = `<h3>용법용량</h3>` + (dosageRaw || '<p>정보 없음</p>');
-
-        // Precautions & Expert Info
-        const precautionsRaw = document.getElementById('dataPrecautions').value;
+        // Section Content
+        const indicationsHtml = `<h3>효능효과</h3>` + (document.getElementById('dataIndications').value || '<p>정보 없음</p>');
+        const dosageHtml = `<h3>용법용량</h3>` + (document.getElementById('dataDosage').value || '<p>정보 없음</p>');
+        
+        // Precautions + Expert
+        let precautionsCombinedHtml = `<h3>사용상의 주의사항</h3>` + (document.getElementById('dataPrecautions').value || '<p>정보 없음</p>');
         const expertInfoRaw = document.getElementById('dataExpert').value;
-        
-        let precautionsCombinedHtml = `<h3>사용상의 주의사항</h3>` + (precautionsRaw || '<p>정보 없음</p>');
-        if (expertInfoRaw) {
-            precautionsCombinedHtml += expertInfoRaw;
-        }
-        
-        // Manual Texts
-        const appearanceRaw = escapeHtml(document.getElementById('appearance').value);
-        const appearanceHtml = `<h3>성상</h3><p>${appearanceRaw}</p>`;
+        if (expertInfoRaw) precautionsCombinedHtml += expertInfoRaw;
 
-        const packagingRaw = escapeHtml(document.getElementById('packaging').value);
-        const packagingHtml = `<h3>포장단위</h3><p>${packagingRaw}</p>`;
-
-        const storageRaw = escapeHtml(document.getElementById('storage').value);
-        const shelfLifeRaw = escapeHtml(document.getElementById('shelfLife').value);
-        const storageAndShelfLifeHtml = `<h3>저장방법 및 사용기간</h3><p><strong>저장방법:</strong> ${storageRaw}</p><p><strong>사용기간:</strong> ${shelfLifeRaw}</p>`;
-
-        const otherInfoRaw = document.getElementById('otherInfo').value;
-        const otherInfoHtml = `<h3>기타 안내사항</h3>` + (otherInfoRaw ? `<p>${escapeHtml(otherInfoRaw)}</p>` : "<p>정보 없음</p>");
-
+        // Simple Fields
+        const appearanceHtml = `<h3>성상</h3><p>${escapeHtml(document.getElementById('appearance').value)}</p>`;
+        const packagingHtml = `<h3>포장단위</h3><p>${escapeHtml(document.getElementById('packaging').value)}</p>`;
+        const storageHtml = `<h3>저장방법 및 사용기간</h3><p><strong>저장방법:</strong> ${escapeHtml(document.getElementById('storage').value)}</p><p><strong>사용기간:</strong> ${escapeHtml(document.getElementById('shelfLife').value)}</p>`;
+        const otherInfoHtml = `<h3>기타 안내사항</h3>` + (document.getElementById('otherInfo').value ? `<p>${escapeHtml(document.getElementById('otherInfo').value)}</p>` : '<p>정보 없음</p>');
         const revisionDateRaw = document.getElementById('revisionDate').value;
         const revisionDateHtml = `<h3>개정연월일</h3><p>${escapeHtml(revisionDateRaw)}</p>`;
 
@@ -467,37 +376,26 @@
         const importerName = document.getElementById('importer').value.trim();
 
         // IDs
-        const bundleId = uuidv4();
+        const bundleId = uuidv4(); // Used for Bundle ID AND Identifier
         const compositionId = uuidv4();
         const timestamp = getIsoTimestamp();
         const dateOnly = getCurrentDate();
-
         let orgRegistry = {};
-
         function getOrgId(name) {
             if(!name) return null;
-            if(!orgRegistry[name]) {
-                orgRegistry[name] = uuidv4();
-            }
+            if(!orgRegistry[name]) orgRegistry[name] = uuidv4();
             return orgRegistry[name];
         }
-
         const authorOrgId = getOrgId(orgName);
         const manufOrgId = getOrgId(manufName);
         const importerOrgId = getOrgId(importerName);
 
-        // --- Build XML ---
-        let bundleEntries = [];
+        // --- 1. GENERATE XML ---
         let sections = [];
-        
         const addSection = (title, code, display, textContent, entryRefId = null) => {
             let sectionXml = `<section><title value="${title}"/><code><coding><system value="2.16.840.1.113883.6.1"/><code value="${code}"/><display value="${display}"/></coding></code>`;
-            if (textContent) {
-                sectionXml += `<text><div xmlns="http://www.w3.org/1999/xhtml">${textContent}</div></text>`;
-            }
-            if (entryRefId) {
-                sectionXml += `<entry><reference value="urn:uuid:${entryRefId}"/></entry>`;
-            }
+            if (textContent) sectionXml += `<text><div xmlns="http://www.w3.org/1999/xhtml">${textContent}</div></text>`;
+            if (entryRefId) sectionXml += `<entry><reference value="urn:uuid:${entryRefId}"/></entry>`;
             sectionXml += `</section>`;
             sections.push(sectionXml);
         };
@@ -509,79 +407,139 @@
         addSection("용법·용량", "34068-7", "Dosage and administration section", dosageHtml);
         addSection("사용상의 주의사항", "43685-7", "Warnings and precautions section", precautionsCombinedHtml);
         addSection("포장단위", "34069-5", "How supplied section", packagingHtml);
-        addSection("저장방법, 사용기간", "44425-7", "Storage and handling section", storageAndShelfLifeHtml);
-        
-        // Add Manufacturer Narrative and Reference
+        addSection("저장방법, 사용기간", "44425-7", "Storage and handling section", storageHtml);
         addSection("제조원", "42229-5", "SPL unclassified section", `<p>${escapeHtml(manufName)}</p>`, manufOrgId);
-        
-        // Add Importer Narrative and Reference
-        if (importerOrgId) {
-            addSection("수입자", "42229-5", "SPL unclassified section", `<p>${escapeHtml(importerName)}</p>`, importerOrgId);
-        }
-
+        if (importerOrgId) addSection("수입자", "42229-5", "SPL unclassified section", `<p>${escapeHtml(importerName)}</p>`, importerOrgId);
         addSection("기타 안내사항", "42229-5", "SPL unclassified section", otherInfoHtml);
         addSection("개정연월일", "42229-5", "SPL unclassified section", revisionDateHtml);
 
-        const compositionXml = `
-    <entry>
-        <fullUrl value="urn:uuid:${compositionId}"/>
-        <resource>
-            <Composition>
-                <id value="${compositionId}"/>
-                <meta><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Composition-uv-epi"/></meta>
-                <status value="final"/>
-                <type><coding><system value="2.16.840.1.113883.6.1"/><code value="60591-5"/><display value="Summary of Product Characteristics"/></coding></type>
-                <title value="${escapeHtml(mainTitle)}"/>
-                <date value="${dateOnly}"/>
-                <author><reference value="urn:uuid:${authorOrgId}"/></author>
-                <language value="ko"/>
-                ${sections.join('')}
-            </Composition>
-        </resource>
-    </entry>`;
-        bundleEntries.push(compositionXml);
-
-        // Organization Entries
+        let orgEntries = "";
         for (const [name, id] of Object.entries(orgRegistry)) {
-            const orgXml = `
-    <entry>
-        <fullUrl value="urn:uuid:${id}"/>
-        <resource>
-            <Organization>
-                <id value="${id}"/>
-                <meta><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/></meta>
-                <name value="${escapeHtml(name)}"/>
-            </Organization>
-        </resource>
-    </entry>`;
-            bundleEntries.push(orgXml);
+            orgEntries += `<entry><fullUrl value="urn:uuid:${id}"/><resource><Organization><id value="${id}"/><meta><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/></meta><name value="${escapeHtml(name)}"/></Organization></resource></entry>`;
         }
 
-        // Final Assembly
-        let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+        const fullXml = `<?xml version="1.0" encoding="UTF-8"?>
 <Bundle xmlns="http://hl7.org/fhir">
   <id value="${bundleId}"/>
-  <meta>
-    <versionId value="1"/>
-    <lastUpdated value="${timestamp}"/>
-    <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Bundle-uv-epi"/>
-  </meta>
+  <meta><versionId value="1"/><lastUpdated value="${timestamp}"/><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Bundle-uv-epi"/></meta>
   <language value="ko"/>
-  <identifier>
-    <system value="https://mfds.go.kr/fhir/epiGuid"/>
-    <value value="${escapeHtml(externalId)}"/>
-  </identifier>
+  <identifier><system value="https://mfds.go.kr/fhir/epiGuid"/><value value="${bundleId}"/></identifier>
   <type value="document"/>
   <timestamp value="${timestamp}"/>
-  ${bundleEntries.join('')}
+  <entry>
+    <fullUrl value="urn:uuid:${compositionId}"/>
+    <resource>
+      <Composition>
+        <id value="${compositionId}"/>
+        <meta><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Composition-uv-epi"/></meta>
+        <status value="final"/>
+        <type><coding><system value="2.16.840.1.113883.6.1"/><code value="60591-5"/><display value="Summary of Product Characteristics"/></coding></type>
+        <title value="${escapeHtml(mainTitle)}"/>
+        <date value="${dateOnly}"/>
+        <author><reference value="urn:uuid:${authorOrgId}"/></author>
+        <language value="ko"/>
+        ${sections.join('')}
+      </Composition>
+    </resource>
+  </entry>
+  ${orgEntries}
 </Bundle>`;
 
-        downloadFile("epi-document.xml", xmlContent);
+        // --- 2. GENERATE HTML ---
+        // Convert XML string to a script block safe string
+        const xmlForScript = fullXml.replace(/<script/g, "&lt;script").replace(/<\/script>/g, "&lt;/script&gt;");
+
+        const viewerHtml = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(mainTitle)} 전자설명서</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root { --container-max: 700px; --container-pad-v: 24px; --container-pad-h: 24px; --primary-color: #75188f; --bg-light: #fafafa; }
+    body { font-family: 'Noto Sans KR', sans-serif; margin: 0; background: #f7f7fa; }
+    .container { width: 100%; max-width: var(--container-max); margin: 2em auto; background: #fff; border-radius: 12px; padding: var(--container-pad-v) var(--container-pad-h); box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
+    h1 { font-size: 1.8em; line-height: 1.2; margin-bottom: 0.5em; }
+    h2.collapsible { display: flex; align-items: center; gap: 0.5em; background: var(--bg-light); border: 1px solid #ccc; border-radius: 4px; padding: 0.75em 1em; cursor: pointer; margin: 1.5em 0 0.5em; font-size: 1.1em; color: var(--primary-color); }
+    .content { display: none; padding: 1em; line-height: 1.6; }
+    .download-btn { display: inline-block; background: var(--primary-color); color: #fff; font-weight: bold; border-radius: 8px; border: none; padding: 0.75em 1.5em; margin-right: 0.5em; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="button-bar" style="margin-bottom: 2em;">
+        <button class="download-btn" onclick="downloadXML()">FHIR XML 다운로드</button>
+        <button class="download-btn" id="expand-all">모두 펼치기</button>
+        <button class="download-btn" onclick="window.print()">PDF 프린트</button>
+    </div>
+
+    <h1>${escapeHtml(mainTitle)} e-라벨 (전자첨부문서)</h1>
+    <p>개정일자: ${escapeHtml(revisionDateRaw)}</p>
+
+    <!-- Sections -->
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>제품명</h2><div class="content">${productNameHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>성상</h2><div class="content">${appearanceHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>원료약품 및 그 분량</h2><div class="content">${ingredientHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>효능효과</h2><div class="content">${indicationsHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>용법·용량</h2><div class="content">${dosageHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>사용상의 주의사항</h2><div class="content">${precautionsCombinedHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>포장단위</h2><div class="content">${packagingHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>저장방법, 사용기간</h2><div class="content">${storageHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>제조원</h2><div class="content"><p>${escapeHtml(manufName)}</p></div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>수입자</h2><div class="content"><p>${escapeHtml(importerName)}</p></div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>기타 안내사항</h2><div class="content">${otherInfoHtml}</div></div>
+
+    <script type="text/plain" id="orig-xml">${xmlForScript}<\/script>
+    <script>
+      function downloadXML() {
+        var xmlContent = document.getElementById('orig-xml').textContent.trim();
+        var blob = new Blob([xmlContent], {type: "application/xml"});
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = "epi-document.xml";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      document.querySelectorAll('.section > h2.collapsible').forEach(header => {
+        header.addEventListener('click', () => {
+          const content = header.nextElementSibling;
+          const isOpen = content.style.display === 'block';
+          content.style.display = isOpen ? 'none' : 'block';
+          header.querySelector('.toggle').textContent = isOpen ? '▶' : '▼';
+        });
+      });
+
+      document.getElementById('expand-all').addEventListener('click', function() {
+        const allContents = document.querySelectorAll('.content');
+        const isExpanded = this.textContent === '모두 접기';
+        allContents.forEach(c => c.style.display = isExpanded ? 'none' : 'block');
+        document.querySelectorAll('.toggle').forEach(t => t.textContent = isExpanded ? '▶' : '▼');
+        this.textContent = isExpanded ? '모두 펼치기' : '모두 접기';
+      });
+    <\/script>
+  </div>
+</body>
+</html>`;
+
+        // --- 3. TRIGGER DOWNLOADS ---
+        // Download XML
+        downloadFile("epi-document.xml", fullXml, "text/xml");
+        
+        // Download HTML
+        // Small delay to ensure browser doesn't block second download
+        setTimeout(() => {
+            downloadFile("epi-viewer.html", viewerHtml, "text/html");
+        }, 500);
     }
 
-    function downloadFile(filename, content) {
+    function downloadFile(filename, content, mimeType) {
         const element = document.createElement('a');
-        const blob = new Blob([content], {type: 'text/xml'});
+        const blob = new Blob([content], {type: mimeType});
         element.href = URL.createObjectURL(blob);
         element.download = filename;
         document.body.appendChild(element);
