@@ -6,24 +6,38 @@
     <title>ePI FHIR XML Generator</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
         h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 30px; color: #34495e; font-size: 1.2em; }
         
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9em; }
         input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1em; }
         textarea { height: 100px; resize: vertical; }
         
+        /* Product Name Rows */
         .row-container { margin-bottom: 10px; display: flex; gap: 10px; }
-        .btn-add { background-color: #3498db; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; margin-bottom: 10px; }
-        .btn-remove { background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+
+        /* Ingredient Table Styling */
+        .ingredient-wrapper { background: #fafafa; padding: 15px; border: 1px solid #eee; border-radius: 5px; }
+        .base-amount-line { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; font-size: 1.1em; font-weight: bold; }
+        .ing-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+        .ing-table th { background: #eceff1; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; font-size: 0.9em; }
+        .ing-table td { padding: 5px; border-bottom: 1px solid #eee; }
+        .ing-table input { width: 100%; border: 1px solid #ddd; padding: 8px; }
+        
+        /* Buttons */
+        .btn-add { background-color: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+        .btn-add:hover { background-color: #2980b9; }
+        
+        .btn-remove { background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
+        .btn-remove:hover { background-color: #c0392b; }
         
         .action-area { margin-top: 40px; text-align: center; padding-top: 20px; border-top: 2px solid #eee; }
         .btn-generate { background-color: #27ae60; color: white; border: none; padding: 15px 30px; font-size: 1.1em; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
         .btn-generate:hover { background-color: #219150; }
 
-        .hint { font-size: 0.8em; color: #7f8c8d; margin-top: -10px; margin-bottom: 10px; }
+        .hint { font-size: 0.8em; color: #7f8c8d; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -42,7 +56,7 @@
         <input type="text" id="externalId" placeholder="예: KR-12345678">
     </div>
 
-    <!-- 2. Product Names (Dynamic Rows) -->
+    <!-- 2. Product Names -->
     <h2>제품명</h2>
     <div id="productNameContainer">
         <div class="row-container">
@@ -50,7 +64,6 @@
         </div>
     </div>
     <button type="button" class="btn-add" onclick="addProductRow()">+ 제품명 추가</button>
-    <p class="hint">공통으로 e-라벨을 사용하는 경우 제품명을 추가하세요.</p>
 
     <!-- 3. Detail Inputs -->
     <h2>상세 정보</h2>
@@ -60,9 +73,41 @@
         <textarea id="appearance" placeholder="성상을 입력하세요"></textarea>
     </div>
 
+    <!-- UPDATED: Ingredient Table Section -->
     <div class="form-group">
         <label>원료약품 및 분량 **</label>
-        <textarea id="ingredients" placeholder="내용을 입력하세요"></textarea>
+        <div class="ingredient-wrapper">
+            <!-- Context Line: 이 약 XXX 중 -->
+            <div class="base-amount-line">
+                <span>이 약 </span>
+                <input type="text" id="ingBaseAmount" placeholder="예: 1mL" style="width: 150px;">
+                <span> 중</span>
+            </div>
+
+            <!-- Table Input -->
+            <table class="ing-table" id="ingTable">
+                <thead>
+                    <tr>
+                        <th width="20%">배합목적</th>
+                        <th width="35%">원료명</th>
+                        <th width="20%">분량</th>
+                        <th width="20%">규격</th>
+                        <th width="5%"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Default Row -->
+                    <tr>
+                        <td><input type="text" class="ing-purpose" placeholder="예: 주성분"></td>
+                        <td><input type="text" class="ing-name" placeholder="예: 이오헥솔"></td>
+                        <td><input type="text" class="ing-qty" placeholder="예: 647mg"></td>
+                        <td><input type="text" class="ing-std" placeholder="예: USP"></td>
+                        <td><button type="button" class="btn-remove" onclick="removeRow(this)">X</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button type="button" class="btn-add" onclick="addIngredientRow()">+ 원료 추가</button>
+        </div>
     </div>
 
     <div class="form-group">
@@ -126,16 +171,11 @@
         });
     }
 
-    // 2. Helper: Get Current ISO Date/Time
-    function getIsoTimestamp() {
-        return new Date().toISOString();
-    }
+    // 2. Helper: Date Functions
+    function getIsoTimestamp() { return new Date().toISOString(); }
+    function getCurrentDate() { return new Date().toISOString().split('T')[0]; }
 
-    function getCurrentDate() {
-        return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    }
-
-    // 3. Helper: Escape HTML for XML content
+    // 3. Helper: Escape HTML
     function escapeHtml(text) {
         if (!text) return '';
         return text
@@ -144,10 +184,10 @@
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;")
-            .replace(/\n/g, "<br/>"); // Convert newlines to breaks for XHTML display
+            .replace(/\n/g, "<br/>"); 
     }
 
-    // 4. UI: Add Product Name Row
+    // 4. Product Name Rows
     function addProductRow() {
         const container = document.getElementById('productNameContainer');
         const div = document.createElement('div');
@@ -159,9 +199,30 @@
         container.appendChild(div);
     }
 
-    // 5. Main: Generate XML
+    // 5. Ingredient Table Rows
+    function addIngredientRow() {
+        const tbody = document.querySelector('#ingTable tbody');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input type="text" class="ing-purpose" placeholder=""></td>
+            <td><input type="text" class="ing-name" placeholder=""></td>
+            <td><input type="text" class="ing-qty" placeholder=""></td>
+            <td><input type="text" class="ing-std" placeholder=""></td>
+            <td><button type="button" class="btn-remove" onclick="removeRow(this)">X</button></td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+    function removeRow(btn) {
+        const row = btn.closest('tr');
+        // Prevent deleting the last row if you want to keep at least one, 
+        // but allowing delete all is fine too.
+        row.remove();
+    }
+
+    // 6. Main: Generate XML
     function generateXML() {
-        // Collect Data
+        // Collect Basic Data
         const orgName = document.getElementById('orgName').value || 'Unknown Organization';
         const externalId = document.getElementById('externalId').value || 'UNKNOWN-ID';
         
@@ -172,12 +233,54 @@
             if(input.value.trim()) productNamesList.push(input.value.trim());
         });
         const mainTitle = productNamesList.length > 0 ? productNamesList[0] : 'Product Name';
-        // HTML content for Product Name section
         const productNameHtml = productNamesList.map(name => `<p>${escapeHtml(name)}</p>`).join('');
 
-        // Text Fields
+        // --- Ingredient Table Generation Logic ---
+        const ingBaseAmount = document.getElementById('ingBaseAmount').value;
+        const ingRows = document.querySelectorAll('#ingTable tbody tr');
+        
+        let ingredientHtml = "";
+        
+        // 1. Add context header
+        if(ingBaseAmount) {
+            ingredientHtml += `<p>이 약 ${escapeHtml(ingBaseAmount)} 중</p>`;
+        } else {
+            ingredientHtml += `<p>원료약품 및 분량</p>`;
+        }
+
+        // 2. Open Table
+        ingredientHtml += `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse: collapse;">`;
+        ingredientHtml += `<thead><tr style="background-color:#f0f0f0;">
+            <th>배합목적</th>
+            <th>원료명</th>
+            <th>분량</th>
+            <th>규격</th>
+        </tr></thead><tbody>`;
+
+        // 3. Loop through rows
+        ingRows.forEach(row => {
+            const purpose = row.querySelector('.ing-purpose').value;
+            const name = row.querySelector('.ing-name').value;
+            const qty = row.querySelector('.ing-qty').value;
+            const std = row.querySelector('.ing-std').value;
+            
+            // Only add row if it has some data
+            if(purpose || name || qty || std) {
+                ingredientHtml += `<tr>
+                    <td>${escapeHtml(purpose)}</td>
+                    <td>${escapeHtml(name)}</td>
+                    <td>${escapeHtml(qty)}</td>
+                    <td>${escapeHtml(std)}</td>
+                </tr>`;
+            }
+        });
+
+        // 4. Close Table
+        ingredientHtml += `</tbody></table>`;
+        // ----------------------------------------
+
+        // Other Text Fields
         const appearance = escapeHtml(document.getElementById('appearance').value);
-        const ingredients = escapeHtml(document.getElementById('ingredients').value);
         const indications = escapeHtml(document.getElementById('indications').value);
         const dosage = escapeHtml(document.getElementById('dosage').value);
         const precautions = escapeHtml(document.getElementById('precautions').value);
@@ -190,7 +293,7 @@
         const manufName = document.getElementById('manufacturer').value || orgName;
         const importerName = document.getElementById('importer').value || '';
 
-        // Generate UUIDs for this session
+        // UUIDs
         const bundleId = uuidv4();
         const compositionId = uuidv4();
         const authorOrgId = uuidv4();
@@ -200,36 +303,22 @@
         const timestamp = getIsoTimestamp();
         const dateOnly = getCurrentDate();
 
-        // ---------------------------------------------------------
-        // Construct XML
-        // NOTE: We insert "Appearance" (성상) as a section or part of Description based on logic.
-        // I will add a specific section for Appearance using standard LOINC if possible, 
-        // or insert it into the logic structure provided.
-        // ---------------------------------------------------------
-
         let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <Bundle xmlns="http://hl7.org/fhir">
-  <!-- Stable UUID for the Bundle -->
   <id value="${bundleId}"/>
-
-  <!-- Metadata -->
   <meta>
     <versionId value="1"/>
     <lastUpdated value="${timestamp}"/>
     <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Bundle-uv-epi"/>
   </meta>
-
   <language value="ko"/>
-
   <identifier>
     <system value="https://mfds.go.kr/fhir/epiGuid"/>
     <value value="${escapeHtml(externalId)}"/>
   </identifier>
-
   <type value="document"/>
   <timestamp value="${timestamp}"/>
 
-  <!-- Composition (Document Body) -->
   <entry>
     <fullUrl value="urn:uuid:${compositionId}"/>
     <resource>
@@ -270,7 +359,7 @@
           </text>
         </section>
 
-        <!-- Section: 성상 (Appearance) - Added as separate section for clarity -->
+        <!-- Section: 성상 -->
         <section>
           <title value="성상"/>
           <code>
@@ -287,7 +376,7 @@
           </text>
         </section>
 
-        <!-- Section: 원료약품 및 그 분량 -->
+        <!-- Section: 원료약품 및 그 분량 (TABLE FORMAT) -->
         <section>
           <title value="원료약품 및 그 분량"/>
           <code>
@@ -299,7 +388,7 @@
           </code>
           <text>
             <div xmlns="http://www.w3.org/1999/xhtml">
-              ${ingredients}
+              ${ingredientHtml}
             </div>
           </text>
         </section>
@@ -390,7 +479,6 @@
           </text>
         </section>
 
-        <!-- Section: 제조원 (Reference) -->
         <section>
           <title value="제조원"/>
           <code>
@@ -405,7 +493,6 @@
           </entry>
         </section>
 
-        <!-- Section: 수입자 (Reference) -->
         <section>
           <title value="수입자"/>
           <code>
@@ -420,7 +507,6 @@
           </entry>
         </section>
 
-        <!-- Section: 기타 안내사항 -->
         <section>
           <title value="기타 안내사항"/>
           <code>
@@ -436,12 +522,10 @@
             </div>
           </text>
         </section>
-
       </Composition>
     </resource>
   </entry>
 
-  <!-- Organization 1: Author (The company filling this out) -->
   <entry>
     <fullUrl value="urn:uuid:${authorOrgId}"/>
     <resource>
@@ -455,7 +539,6 @@
     </resource>
   </entry>
 
-  <!-- Organization 2: Manufacturer -->
   <entry>
     <fullUrl value="urn:uuid:${manufOrgId}"/>
     <resource>
@@ -469,7 +552,6 @@
     </resource>
   </entry>
 
-  <!-- Organization 3: Importer -->
   <entry>
     <fullUrl value="urn:uuid:${importerOrgId}"/>
     <resource>
@@ -488,7 +570,6 @@
         downloadFile("epi-document.xml", xmlContent);
     }
 
-    // 6. Helper: Download Trigger
     function downloadFile(filename, content) {
         const element = document.createElement('a');
         const blob = new Blob([content], {type: 'text/xml'});
