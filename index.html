@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePI FHIR XML Generator</title>
+    <title>ePI FHIR XML Generator (MFDS Compatible)</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -13,8 +13,12 @@
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9em; }
         input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1em; }
-        textarea { height: 100px; resize: vertical; }
         
+        /* File Input Styling */
+        input[type="file"] { border: 1px solid #ccc; padding: 10px; width: 100%; background: #fafafa; border-radius: 4px; }
+        .file-status { font-size: 0.85em; color: #27ae60; margin-top: 5px; display: none; font-weight: bold; }
+        .file-preview { border: 1px dashed #ccc; padding: 10px; background: #f9f9f9; max-height: 150px; overflow-y: auto; font-size: 0.8em; color: #555; margin-top: 5px; display: none; }
+
         /* Product Name Rows */
         .row-container { margin-bottom: 10px; display: flex; gap: 10px; }
 
@@ -28,16 +32,11 @@
         
         /* Buttons */
         .btn-add { background-color: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
-        .btn-add:hover { background-color: #2980b9; }
-        
         .btn-remove { background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
-        .btn-remove:hover { background-color: #c0392b; }
         
         .action-area { margin-top: 40px; text-align: center; padding-top: 20px; border-top: 2px solid #eee; }
         .btn-generate { background-color: #27ae60; color: white; border: none; padding: 15px 30px; font-size: 1.1em; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
         .btn-generate:hover { background-color: #219150; }
-
-        .hint { font-size: 0.8em; color: #7f8c8d; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -70,21 +69,18 @@
     
     <div class="form-group">
         <label>성상</label>
-        <textarea id="appearance" placeholder="성상을 입력하세요"></textarea>
+        <textarea id="appearance" style="height:80px;" placeholder="성상을 입력하세요"></textarea>
     </div>
 
-    <!-- UPDATED: Ingredient Table Section -->
+    <!-- Ingredient Table -->
     <div class="form-group">
         <label>원료약품 및 분량 **</label>
         <div class="ingredient-wrapper">
-            <!-- Context Line: 이 약 XXX 중 -->
             <div class="base-amount-line">
                 <span>이 약 </span>
                 <input type="text" id="ingBaseAmount" placeholder="예: 1mL" style="width: 150px;">
                 <span> 중</span>
             </div>
-
-            <!-- Table Input -->
             <table class="ing-table" id="ingTable">
                 <thead>
                     <tr>
@@ -96,7 +92,6 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- Default Row -->
                     <tr>
                         <td><input type="text" class="ing-purpose" placeholder="예: 주성분"></td>
                         <td><input type="text" class="ing-name" placeholder="예: 이오헥솔"></td>
@@ -110,21 +105,29 @@
         </div>
     </div>
 
+    <!-- XML File Uploads for Main Sections -->
     <div class="form-group">
-        <label>효능효과 **</label>
-        <textarea id="indications" placeholder="내용을 입력하세요"></textarea>
+        <label>효능효과 (XML 파일 업로드) **</label>
+        <input type="file" id="fileIndications" accept=".xml" onchange="handleFileUpload(this, 'previewIndications')">
+        <div id="previewIndications" class="file-preview"></div>
+        <input type="hidden" id="dataIndications">
     </div>
 
     <div class="form-group">
-        <label>용법용량 **</label>
-        <textarea id="dosage" placeholder="내용을 입력하세요"></textarea>
+        <label>용법용량 (XML 파일 업로드) **</label>
+        <input type="file" id="fileDosage" accept=".xml" onchange="handleFileUpload(this, 'previewDosage')">
+        <div id="previewDosage" class="file-preview"></div>
+        <input type="hidden" id="dataDosage">
     </div>
 
     <div class="form-group">
-        <label>사용상의 주의사항 **</label>
-        <textarea id="precautions" placeholder="내용을 입력하세요"></textarea>
+        <label>사용상의 주의사항 (XML 파일 업로드) **</label>
+        <input type="file" id="filePrecautions" accept=".xml" onchange="handleFileUpload(this, 'previewPrecautions')">
+        <div id="previewPrecautions" class="file-preview"></div>
+        <input type="hidden" id="dataPrecautions">
     </div>
 
+    <!-- Remaining Info -->
     <div class="form-group">
         <label>포장단위</label>
         <input type="text" id="packaging" placeholder="예: 30정/병">
@@ -142,7 +145,7 @@
 
     <div class="form-group">
         <label>기타 안내사항</label>
-        <textarea id="otherInfo" placeholder="기타 정보를 입력하세요"></textarea>
+        <textarea id="otherInfo" style="height:80px;" placeholder="기타 정보를 입력하세요"></textarea>
     </div>
 
     <!-- 4. Manufacturing Info -->
@@ -163,7 +166,74 @@
 </div>
 
 <script>
-    // 1. Helper: Generate UUID v4
+    // ------------------------------------------------------------------
+    // 1. MFDS XML Parsing Logic
+    // ------------------------------------------------------------------
+    function handleFileUpload(inputElement, previewId) {
+        const file = inputElement.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const xmlContent = e.target.result;
+            const parsedHTML = parseMfdsXmlToHtml(xmlContent);
+            
+            // Show preview
+            const previewDiv = document.getElementById(previewId);
+            previewDiv.style.display = 'block';
+            previewDiv.textContent = "Parsed Content Preview: " + parsedHTML.replace(/<[^>]*>?/gm, '').substring(0, 100) + "...";
+            
+            // Store hidden data
+            // We store the 'clean' HTML to be injected into the FHIR bundle
+            const hiddenInputId = inputElement.id.replace('file', 'data'); 
+            document.getElementById(hiddenInputId).value = parsedHTML;
+        };
+        reader.readAsText(file);
+    }
+
+    function parseMfdsXmlToHtml(xmlString) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        
+        let htmlOutput = "";
+        
+        // Find all ARTICLES. Structure: DOC -> SECTION -> ARTICLE -> PARAGRAPH
+        const articles = xmlDoc.getElementsByTagName("ARTICLE");
+        
+        if (articles.length > 0) {
+            for (let i = 0; i < articles.length; i++) {
+                const article = articles[i];
+                const title = article.getAttribute("title");
+                
+                if (title) {
+                    htmlOutput += `<h3>${escapeHtml(title)}</h3>`;
+                }
+                
+                const paragraphs = article.getElementsByTagName("PARAGRAPH");
+                for (let j = 0; j < paragraphs.length; j++) {
+                    // textContent retrieves text inside CDATA as well
+                    const text = paragraphs[j].textContent; 
+                    // We wrap it in <p>. Note: if CDATA contained HTML tags (like <sup>), 
+                    // they are now part of the string. We trust the input or escape it.
+                    // For FHIR readable text, we generally want to allow basic formatting if present,
+                    // but to be safe against XML errors, we can escape the text content.
+                    htmlOutput += `<p>${escapeHtml(text)}</p>`;
+                }
+            }
+        } else {
+            // Fallback if no ARTICLE tags found (just dump all paragraphs)
+            const paragraphs = xmlDoc.getElementsByTagName("PARAGRAPH");
+            for (let j = 0; j < paragraphs.length; j++) {
+                htmlOutput += `<p>${escapeHtml(paragraphs[j].textContent)}</p>`;
+            }
+        }
+
+        return htmlOutput;
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Standard Utilities
+    // ------------------------------------------------------------------
     function uuidv4() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
@@ -171,23 +241,24 @@
         });
     }
 
-    // 2. Helper: Date Functions
     function getIsoTimestamp() { return new Date().toISOString(); }
     function getCurrentDate() { return new Date().toISOString().split('T')[0]; }
 
-    // 3. Helper: Escape HTML
     function escapeHtml(text) {
         if (!text) return '';
+        // Note: For the XML Parser above, we might be double escaping if we are not careful.
+        // But for standard text inputs, this is required.
         return text
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;")
-            .replace(/\n/g, "<br/>"); 
+            .replace(/'/g, "&#039;");
     }
 
-    // 4. Product Name Rows
+    // ------------------------------------------------------------------
+    // 3. Dynamic Rows Logic
+    // ------------------------------------------------------------------
     function addProductRow() {
         const container = document.getElementById('productNameContainer');
         const div = document.createElement('div');
@@ -199,97 +270,70 @@
         container.appendChild(div);
     }
 
-    // 5. Ingredient Table Rows
     function addIngredientRow() {
         const tbody = document.querySelector('#ingTable tbody');
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><input type="text" class="ing-purpose" placeholder=""></td>
-            <td><input type="text" class="ing-name" placeholder=""></td>
-            <td><input type="text" class="ing-qty" placeholder=""></td>
-            <td><input type="text" class="ing-std" placeholder=""></td>
+            <td><input type="text" class="ing-purpose"></td>
+            <td><input type="text" class="ing-name"></td>
+            <td><input type="text" class="ing-qty"></td>
+            <td><input type="text" class="ing-std"></td>
             <td><button type="button" class="btn-remove" onclick="removeRow(this)">X</button></td>
         `;
         tbody.appendChild(tr);
     }
 
     function removeRow(btn) {
-        const row = btn.closest('tr');
-        // Prevent deleting the last row if you want to keep at least one, 
-        // but allowing delete all is fine too.
-        row.remove();
+        btn.closest('tr').remove();
     }
 
-    // 6. Main: Generate XML
+    // ------------------------------------------------------------------
+    // 4. Main Generation Logic
+    // ------------------------------------------------------------------
     function generateXML() {
-        // Collect Basic Data
+        // Basic Info
         const orgName = document.getElementById('orgName').value || 'Unknown Organization';
         const externalId = document.getElementById('externalId').value || 'UNKNOWN-ID';
         
-        // Product Names
+        // Product Name
         const productInputs = document.querySelectorAll('.product-name-input');
         let productNamesList = [];
-        productInputs.forEach(input => {
-            if(input.value.trim()) productNamesList.push(input.value.trim());
-        });
+        productInputs.forEach(input => { if(input.value.trim()) productNamesList.push(input.value.trim()); });
         const mainTitle = productNamesList.length > 0 ? productNamesList[0] : 'Product Name';
         const productNameHtml = productNamesList.map(name => `<p>${escapeHtml(name)}</p>`).join('');
 
-        // --- Ingredient Table Generation Logic ---
+        // Ingredients (Table Construction)
         const ingBaseAmount = document.getElementById('ingBaseAmount').value;
         const ingRows = document.querySelectorAll('#ingTable tbody tr');
-        
         let ingredientHtml = "";
+        if(ingBaseAmount) ingredientHtml += `<p>이 약 ${escapeHtml(ingBaseAmount)} 중</p>`;
+        else ingredientHtml += `<p>원료약품 및 분량</p>`;
         
-        // 1. Add context header
-        if(ingBaseAmount) {
-            ingredientHtml += `<p>이 약 ${escapeHtml(ingBaseAmount)} 중</p>`;
-        } else {
-            ingredientHtml += `<p>원료약품 및 분량</p>`;
-        }
-
-        // 2. Open Table
-        ingredientHtml += `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse: collapse;">`;
-        ingredientHtml += `<thead><tr style="background-color:#f0f0f0;">
-            <th>배합목적</th>
-            <th>원료명</th>
-            <th>분량</th>
-            <th>규격</th>
-        </tr></thead><tbody>`;
-
-        // 3. Loop through rows
+        ingredientHtml += `<table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse: collapse;"><thead><tr style="background-color:#f0f0f0;"><th>배합목적</th><th>원료명</th><th>분량</th><th>규격</th></tr></thead><tbody>`;
         ingRows.forEach(row => {
             const purpose = row.querySelector('.ing-purpose').value;
             const name = row.querySelector('.ing-name').value;
             const qty = row.querySelector('.ing-qty').value;
             const std = row.querySelector('.ing-std').value;
-            
-            // Only add row if it has some data
             if(purpose || name || qty || std) {
-                ingredientHtml += `<tr>
-                    <td>${escapeHtml(purpose)}</td>
-                    <td>${escapeHtml(name)}</td>
-                    <td>${escapeHtml(qty)}</td>
-                    <td>${escapeHtml(std)}</td>
-                </tr>`;
+                ingredientHtml += `<tr><td>${escapeHtml(purpose)}</td><td>${escapeHtml(name)}</td><td>${escapeHtml(qty)}</td><td>${escapeHtml(std)}</td></tr>`;
             }
         });
-
-        // 4. Close Table
         ingredientHtml += `</tbody></table>`;
-        // ----------------------------------------
 
-        // Other Text Fields
+        // Retrieve Parsed XML Data (or empty if not uploaded)
+        // Note: These strings are already formatted as HTML tags (<h3>, <p>) by the parser.
+        // We do NOT escape them again here, otherwise tags will show as text.
+        const indicationsHtml = document.getElementById('dataIndications').value || '<p>정보 없음</p>';
+        const dosageHtml = document.getElementById('dataDosage').value || '<p>정보 없음</p>';
+        const precautionsHtml = document.getElementById('dataPrecautions').value || '<p>정보 없음</p>';
+
+        // Other Inputs
         const appearance = escapeHtml(document.getElementById('appearance').value);
-        const indications = escapeHtml(document.getElementById('indications').value);
-        const dosage = escapeHtml(document.getElementById('dosage').value);
-        const precautions = escapeHtml(document.getElementById('precautions').value);
         const packaging = escapeHtml(document.getElementById('packaging').value);
         const storage = escapeHtml(document.getElementById('storage').value);
         const shelfLife = escapeHtml(document.getElementById('shelfLife').value);
         const otherInfo = escapeHtml(document.getElementById('otherInfo').value);
-        
-        // Organizations
         const manufName = document.getElementById('manufacturer').value || orgName;
         const importerName = document.getElementById('importer').value || '';
 
@@ -299,10 +343,12 @@
         const authorOrgId = uuidv4();
         const manufOrgId = uuidv4();
         const importerOrgId = uuidv4();
-        
         const timestamp = getIsoTimestamp();
         const dateOnly = getCurrentDate();
 
+        // -------------------------------------------------------
+        // Construct Final FHIR XML
+        // -------------------------------------------------------
         let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <Bundle xmlns="http://hl7.org/fhir">
   <id value="${bundleId}"/>
@@ -342,185 +388,81 @@
         </author>
         <language value="ko"/>
 
-        <!-- Section: 제품명 -->
+        <!-- 1. 제품명 -->
         <section>
           <title value="제품명"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="69718-5"/>
-              <display value="Statement of identity section"/>
-            </coding>
-          </code>
-          <text>
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              ${productNameHtml}
-            </div>
-          </text>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="69718-5"/><display value="Statement of identity section"/></coding></code>
+          <text><div xmlns="http://www.w3.org/1999/xhtml">${productNameHtml}</div></text>
         </section>
 
-        <!-- Section: 성상 -->
+        <!-- 2. 성상 -->
         <section>
           <title value="성상"/>
-          <code>
-             <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="34089-3"/>
-              <display value="Description section"/>
-            </coding>
-          </code>
-          <text>
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              <p>${appearance}</p>
-            </div>
-          </text>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="34089-3"/><display value="Description section"/></coding></code>
+          <text><div xmlns="http://www.w3.org/1999/xhtml"><p>${appearance}</p></div></text>
         </section>
 
-        <!-- Section: 원료약품 및 그 분량 (TABLE FORMAT) -->
+        <!-- 3. 원료약품 및 분량 -->
         <section>
           <title value="원료약품 및 그 분량"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="34089-3"/>
-              <display value="Description section"/>
-            </coding>
-          </code>
-          <text>
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              ${ingredientHtml}
-            </div>
-          </text>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="34089-3"/><display value="Description section"/></coding></code>
+          <text><div xmlns="http://www.w3.org/1999/xhtml">${ingredientHtml}</div></text>
         </section>
 
-        <!-- Section: 효능효과 -->
+        <!-- 4. 효능효과 (From XML) -->
         <section>
           <title value="효능효과"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="34067-9"/>
-              <display value="Indications and usage section"/>
-            </coding>
-          </code>
-          <text>
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              ${indications}
-            </div>
-          </text>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="34067-9"/><display value="Indications and usage section"/></coding></code>
+          <text><div xmlns="http://www.w3.org/1999/xhtml">${indicationsHtml}</div></text>
         </section>
 
-        <!-- Section: 용법·용량 -->
+        <!-- 5. 용법용량 (From XML) -->
         <section>
           <title value="용법·용량"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="34068-7"/>
-              <display value="Dosage and administration section"/>
-            </coding>
-          </code>
-          <text>
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              ${dosage}
-            </div>
-          </text>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="34068-7"/><display value="Dosage and administration section"/></coding></code>
+          <text><div xmlns="http://www.w3.org/1999/xhtml">${dosageHtml}</div></text>
         </section>
 
-        <!-- Section: 사용상의 주의사항 -->
+        <!-- 6. 사용상의 주의사항 (From XML) -->
         <section>
           <title value="사용상의 주의사항"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="43685-7"/>
-              <display value="Warnings and precautions section"/>
-            </coding>
-          </code>
-          <text>
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              ${precautions}
-            </div>
-          </text>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="43685-7"/><display value="Warnings and precautions section"/></coding></code>
+          <text><div xmlns="http://www.w3.org/1999/xhtml">${precautionsHtml}</div></text>
         </section>
 
-        <!-- Section: 포장단위 -->
+        <!-- 7. 포장단위 -->
         <section>
           <title value="포장단위"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="34069-5"/>
-              <display value="How supplied section"/>
-            </coding>
-          </code>
-          <text>
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              <p>${packaging}</p>
-            </div>
-          </text>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="34069-5"/><display value="How supplied section"/></coding></code>
+          <text><div xmlns="http://www.w3.org/1999/xhtml"><p>${packaging}</p></div></text>
         </section>
 
-        <!-- Section: 저장방법, 사용기간 -->
+        <!-- 8. 저장방법, 사용기간 -->
         <section>
           <title value="저장방법, 사용기간"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="44425-7"/>
-              <display value="Storage and handling section"/>
-            </coding>
-          </code>
-          <text>
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              <p><strong>저장방법:</strong> ${storage}</p>
-              <p><strong>사용기간:</strong> ${shelfLife}</p>
-            </div>
-          </text>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="44425-7"/><display value="Storage and handling section"/></coding></code>
+          <text><div xmlns="http://www.w3.org/1999/xhtml"><p><strong>저장방법:</strong> ${storage}</p><p><strong>사용기간:</strong> ${shelfLife}</p></div></text>
         </section>
 
+        <!-- 9. 제조원 -->
         <section>
           <title value="제조원"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="42229-5"/>
-              <display value="SPL unclassified section"/>
-            </coding>
-          </code>
-          <entry>
-            <reference value="urn:uuid:${manufOrgId}"/>
-          </entry>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="42229-5"/><display value="SPL unclassified section"/></coding></code>
+          <entry><reference value="urn:uuid:${manufOrgId}"/></entry>
         </section>
 
+        <!-- 10. 수입자 -->
         <section>
           <title value="수입자"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="42229-5"/>
-              <display value="SPL unclassified section"/>
-            </coding>
-          </code>
-          <entry>
-             <reference value="urn:uuid:${importerOrgId}"/>
-          </entry>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="42229-5"/><display value="SPL unclassified section"/></coding></code>
+          <entry><reference value="urn:uuid:${importerOrgId}"/></entry>
         </section>
 
+        <!-- 11. 기타 -->
         <section>
           <title value="기타 안내사항"/>
-          <code>
-            <coding>
-              <system value="2.16.840.1.113883.6.1"/>
-              <code value="42229-5"/>
-              <display value="SPL unclassified section"/>
-            </coding>
-          </code>
-          <text>
-            <div xmlns="http://www.w3.org/1999/xhtml">
-              ${otherInfo}
-            </div>
-          </text>
+          <code><coding><system value="2.16.840.1.113883.6.1"/><code value="42229-5"/><display value="SPL unclassified section"/></coding></code>
+          <text><div xmlns="http://www.w3.org/1999/xhtml">${otherInfo}</div></text>
         </section>
       </Composition>
     </resource>
@@ -531,9 +473,7 @@
     <resource>
       <Organization>
         <id value="${authorOrgId}"/>
-        <meta>
-          <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/>
-        </meta>
+        <meta><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/></meta>
         <name value="${escapeHtml(orgName)}"/>
       </Organization>
     </resource>
@@ -544,9 +484,7 @@
     <resource>
       <Organization>
         <id value="${manufOrgId}"/>
-        <meta>
-          <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/>
-        </meta>
+        <meta><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/></meta>
         <name value="${escapeHtml(manufName)}"/>
       </Organization>
     </resource>
@@ -557,9 +495,7 @@
     <resource>
       <Organization>
         <id value="${importerOrgId}"/>
-        <meta>
-          <profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/>
-        </meta>
+        <meta><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/></meta>
         <name value="${escapeHtml(importerName)}"/>
       </Organization>
     </resource>
