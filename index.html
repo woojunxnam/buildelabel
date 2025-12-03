@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePI Generator (XML & HTML) - v2.9</title>
+    <title>ePI Generator (XML & HTML) - v3.0</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -23,11 +23,19 @@
         .ing-table th { background: #eceff1; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; font-size: 0.9em; }
         .ing-table td { padding: 5px; border-bottom: 1px solid #eee; }
         .ing-table input { width: 100%; border: 1px solid #ddd; padding: 8px; }
+        
+        /* Buttons */
         .btn-add { background-color: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
         .btn-remove { background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
-        .action-area { margin-top: 40px; text-align: center; padding-top: 20px; border-top: 2px solid #eee; }
-        .btn-generate { background-color: #27ae60; color: white; border: none; padding: 15px 30px; font-size: 1.1em; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
+        
+        .action-area { margin-top: 40px; text-align: center; padding-top: 20px; border-top: 2px solid #eee; display: flex; justify-content: center; gap: 15px; }
+        
+        /* Main Action Buttons */
+        .btn-generate { background-color: #27ae60; color: white; border: none; padding: 15px 25px; font-size: 1.1em; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
         .btn-generate:hover { background-color: #219150; }
+        
+        .btn-html { background-color: #2980b9; }
+        .btn-html:hover { background-color: #1f618d; }
         
         /* HTML Extract Preview */
         .html-extract-preview table { border: 1px solid #ccc; border-collapse: collapse; width: 100%; }
@@ -46,7 +54,6 @@
         <label for="orgName">업체명 (작성자/소유자)</label>
         <input type="text" id="orgName" placeholder="예: 한국제약 주식회사">
     </div>
-    <!-- Removed External ID input -->
 
     <!-- 2. Product Names -->
     <h2>제품명</h2>
@@ -123,7 +130,7 @@
     <!-- Expert Info HTML Upload -->
     <div class="form-group" style="background: #eef2f5; padding: 15px; border-radius: 5px;">
         <label>전문가를 위한 정보 (HTML 파일 업로드) [선택사항]</label>
-        <p style="font-size:0.8em; color:#666; margin-top:-5px;">* 전체 HTML 파일에서 '전문가를 위한 정보' 항목부터 끝까지 자동으로 추출합니다.</p>
+        <p style="font-size:0.8em; color:#666; margin-top:-5px;">* 전체 HTML 파일에서 '전문가를 위한 정보' 항목부터 끝까지 자동으로 추출하여 <b>사용상의 주의사항</b> 하단에 추가합니다.</p>
         <input type="file" id="fileExpert" accept=".html,.htm" onchange="handleHtmlUpload(this, 'previewExpert')">
         <div id="previewExpert" class="file-preview html-extract-preview"></div>
         <input type="hidden" id="dataExpert">
@@ -145,7 +152,7 @@
         <input type="text" id="shelfLife" placeholder="예: 제조일로부터 36개월">
     </div>
 
-    <!-- 4. Manufacturing Info (MOVED UP) -->
+    <!-- 4. Manufacturing Info -->
     <h2>제조/수입 정보</h2>
     <div class="form-group">
         <label>제조원 (업체명)</label>
@@ -156,7 +163,7 @@
         <input type="text" id="importer" placeholder="수입자 업체명 (해당 없을 시 공란)">
     </div>
 
-    <!-- Other Info (MOVED DOWN) -->
+    <!-- Other Info -->
     <div class="form-group">
         <label>기타 안내사항</label>
         <textarea id="otherInfo" style="height:80px;" placeholder="기타 정보를 입력하세요"></textarea>
@@ -167,15 +174,16 @@
         <input type="date" id="revisionDate">
     </div>
 
-    <!-- Action -->
+    <!-- Actions -->
     <div class="action-area">
-        <button type="button" class="btn-generate" onclick="generateAndDownload()">HTML & XML 생성 및 다운로드</button>
+        <button type="button" class="btn-generate" onclick="handleDownloadXML()">FHIR XML 생성 및 다운로드</button>
+        <button type="button" class="btn-generate btn-html" onclick="handleDownloadHTML()">e-Label HTML 생성 및 다운로드</button>
     </div>
 </div>
 
 <script>
     // ------------------------------------------------------------------
-    // 1. Parsing Logic
+    // 1. File Parsing & Handling
     // ------------------------------------------------------------------
     function handleXmlUpload(inputElement, previewId) {
         const file = inputElement.files[0];
@@ -291,7 +299,7 @@
     }
 
     // ------------------------------------------------------------------
-    // 2. Helpers
+    // 2. Utilities
     // ------------------------------------------------------------------
     function uuidv4() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -322,13 +330,14 @@
     function removeRow(btn) { btn.closest('tr').remove(); }
 
     // ------------------------------------------------------------------
-    // 3. Main Generation Logic (XML & HTML)
+    // 3. Logic for Gathering Data & Building XML
     // ------------------------------------------------------------------
-    function generateAndDownload() {
+    
+    // Collects all form data into a structured object
+    function collectFormData() {
         const orgName = document.getElementById('orgName').value.trim() || 'Unknown Organization';
         
-        // --- Gather Data ---
-        // Product Name
+        // Product Names
         const productInputs = document.querySelectorAll('.product-name-input');
         let productNamesList = [];
         productInputs.forEach(input => { if(input.value.trim()) productNamesList.push(input.value.trim()); });
@@ -355,16 +364,14 @@
         ingredientHtml += `</tbody></table>`;
         if(!hasIngredients) ingredientHtml = `<h3>원료약품 및 분량</h3><p>정보 없음</p>`;
 
-        // Section Content
+        // Sections
         const indicationsHtml = `<h3>효능효과</h3>` + (document.getElementById('dataIndications').value || '<p>정보 없음</p>');
         const dosageHtml = `<h3>용법용량</h3>` + (document.getElementById('dataDosage').value || '<p>정보 없음</p>');
         
-        // Precautions + Expert
         let precautionsCombinedHtml = `<h3>사용상의 주의사항</h3>` + (document.getElementById('dataPrecautions').value || '<p>정보 없음</p>');
         const expertInfoRaw = document.getElementById('dataExpert').value;
         if (expertInfoRaw) precautionsCombinedHtml += expertInfoRaw;
 
-        // Simple Fields
         const appearanceHtml = `<h3>성상</h3><p>${escapeHtml(document.getElementById('appearance').value)}</p>`;
         const packagingHtml = `<h3>포장단위</h3><p>${escapeHtml(document.getElementById('packaging').value)}</p>`;
         const storageHtml = `<h3>저장방법 및 사용기간</h3><p><strong>저장방법:</strong> ${escapeHtml(document.getElementById('storage').value)}</p><p><strong>사용기간:</strong> ${escapeHtml(document.getElementById('shelfLife').value)}</p>`;
@@ -375,22 +382,31 @@
         const manufName = document.getElementById('manufacturer').value.trim() || orgName;
         const importerName = document.getElementById('importer').value.trim();
 
-        // IDs
-        const bundleId = uuidv4(); // Used for Bundle ID AND Identifier
+        return {
+            orgName, mainTitle, productNameHtml, ingredientHtml,
+            indicationsHtml, dosageHtml, precautionsCombinedHtml,
+            appearanceHtml, packagingHtml, storageHtml, otherInfoHtml,
+            revisionDateHtml, revisionDateRaw, manufName, importerName
+        };
+    }
+
+    // Builds the FHIR Bundle XML String
+    function buildFHIRXML(data) {
+        const bundleId = uuidv4();
         const compositionId = uuidv4();
         const timestamp = getIsoTimestamp();
         const dateOnly = getCurrentDate();
+        
         let orgRegistry = {};
         function getOrgId(name) {
             if(!name) return null;
             if(!orgRegistry[name]) orgRegistry[name] = uuidv4();
             return orgRegistry[name];
         }
-        const authorOrgId = getOrgId(orgName);
-        const manufOrgId = getOrgId(manufName);
-        const importerOrgId = getOrgId(importerName);
+        const authorOrgId = getOrgId(data.orgName);
+        const manufOrgId = getOrgId(data.manufName);
+        const importerOrgId = getOrgId(data.importerName);
 
-        // --- 1. GENERATE XML ---
         let sections = [];
         const addSection = (title, code, display, textContent, entryRefId = null) => {
             let sectionXml = `<section><title value="${title}"/><code><coding><system value="2.16.840.1.113883.6.1"/><code value="${code}"/><display value="${display}"/></coding></code>`;
@@ -400,25 +416,25 @@
             sections.push(sectionXml);
         };
 
-        addSection("제품명", "69718-5", "Statement of identity section", productNameHtml);
-        addSection("성상", "34089-3", "Description section", appearanceHtml);
-        addSection("원료약품 및 그 분량", "34089-3", "Description section", ingredientHtml);
-        addSection("효능효과", "34067-9", "Indications and usage section", indicationsHtml);
-        addSection("용법·용량", "34068-7", "Dosage and administration section", dosageHtml);
-        addSection("사용상의 주의사항", "43685-7", "Warnings and precautions section", precautionsCombinedHtml);
-        addSection("포장단위", "34069-5", "How supplied section", packagingHtml);
-        addSection("저장방법, 사용기간", "44425-7", "Storage and handling section", storageHtml);
-        addSection("제조원", "42229-5", "SPL unclassified section", `<p>${escapeHtml(manufName)}</p>`, manufOrgId);
-        if (importerOrgId) addSection("수입자", "42229-5", "SPL unclassified section", `<p>${escapeHtml(importerName)}</p>`, importerOrgId);
-        addSection("기타 안내사항", "42229-5", "SPL unclassified section", otherInfoHtml);
-        addSection("개정연월일", "42229-5", "SPL unclassified section", revisionDateHtml);
+        addSection("제품명", "69718-5", "Statement of identity section", data.productNameHtml);
+        addSection("성상", "34089-3", "Description section", data.appearanceHtml);
+        addSection("원료약품 및 그 분량", "34089-3", "Description section", data.ingredientHtml);
+        addSection("효능효과", "34067-9", "Indications and usage section", data.indicationsHtml);
+        addSection("용법·용량", "34068-7", "Dosage and administration section", data.dosageHtml);
+        addSection("사용상의 주의사항", "43685-7", "Warnings and precautions section", data.precautionsCombinedHtml);
+        addSection("포장단위", "34069-5", "How supplied section", data.packagingHtml);
+        addSection("저장방법, 사용기간", "44425-7", "Storage and handling section", data.storageHtml);
+        addSection("제조원", "42229-5", "SPL unclassified section", `<p>${escapeHtml(data.manufName)}</p>`, manufOrgId);
+        if (importerOrgId) addSection("수입자", "42229-5", "SPL unclassified section", `<p>${escapeHtml(data.importerName)}</p>`, importerOrgId);
+        addSection("기타 안내사항", "42229-5", "SPL unclassified section", data.otherInfoHtml);
+        addSection("개정연월일", "42229-5", "SPL unclassified section", data.revisionDateHtml);
 
         let orgEntries = "";
         for (const [name, id] of Object.entries(orgRegistry)) {
             orgEntries += `<entry><fullUrl value="urn:uuid:${id}"/><resource><Organization><id value="${id}"/><meta><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Organization-uv-epi"/></meta><name value="${escapeHtml(name)}"/></Organization></resource></entry>`;
         }
 
-        const fullXml = `<?xml version="1.0" encoding="UTF-8"?>
+        return `<?xml version="1.0" encoding="UTF-8"?>
 <Bundle xmlns="http://hl7.org/fhir">
   <id value="${bundleId}"/>
   <meta><versionId value="1"/><lastUpdated value="${timestamp}"/><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Bundle-uv-epi"/></meta>
@@ -434,7 +450,7 @@
         <meta><profile value="http://hl7.org/fhir/uv/emedicinal-product-info/StructureDefinition/Composition-uv-epi"/></meta>
         <status value="final"/>
         <type><coding><system value="2.16.840.1.113883.6.1"/><code value="60591-5"/><display value="Summary of Product Characteristics"/></coding></type>
-        <title value="${escapeHtml(mainTitle)}"/>
+        <title value="${escapeHtml(data.mainTitle)}"/>
         <date value="${dateOnly}"/>
         <author><reference value="urn:uuid:${authorOrgId}"/></author>
         <language value="ko"/>
@@ -444,17 +460,19 @@
   </entry>
   ${orgEntries}
 </Bundle>`;
+    }
 
-        // --- 2. GENERATE HTML ---
-        // Convert XML string to a script block safe string
-        const xmlForScript = fullXml.replace(/<script/g, "&lt;script").replace(/<\/script>/g, "&lt;/script&gt;");
-
-        const viewerHtml = `<!DOCTYPE html>
+    // Builds the HTML Viewer String (Embedding the XML)
+    function buildHTMLViewer(data, xmlContent) {
+        // Escape XML for embedding inside script tag
+        const xmlForScript = xmlContent.replace(/<script/g, "&lt;script").replace(/<\/script>/g, "&lt;/script&gt;");
+        
+        return `<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(mainTitle)} 전자설명서</title>
+  <title>${escapeHtml(data.mainTitle)} 전자설명서</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     :root { --container-max: 700px; --container-pad-v: 24px; --container-pad-h: 24px; --primary-color: #75188f; --bg-light: #fafafa; }
@@ -476,21 +494,20 @@
         <button class="download-btn" onclick="window.print()">PDF 프린트</button>
     </div>
 
-    <h1>${escapeHtml(mainTitle)} e-라벨 (전자첨부문서)</h1>
-    <p>개정일자: ${escapeHtml(revisionDateRaw)}</p>
+    <h1>${escapeHtml(data.mainTitle)} e-라벨 (전자첨부문서)</h1>
+    <p>개정일자: ${escapeHtml(data.revisionDateRaw)}</p>
 
-    <!-- Sections -->
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>제품명</h2><div class="content">${productNameHtml}</div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>성상</h2><div class="content">${appearanceHtml}</div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>원료약품 및 그 분량</h2><div class="content">${ingredientHtml}</div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>효능효과</h2><div class="content">${indicationsHtml}</div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>용법·용량</h2><div class="content">${dosageHtml}</div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>사용상의 주의사항</h2><div class="content">${precautionsCombinedHtml}</div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>포장단위</h2><div class="content">${packagingHtml}</div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>저장방법, 사용기간</h2><div class="content">${storageHtml}</div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>제조원</h2><div class="content"><p>${escapeHtml(manufName)}</p></div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>수입자</h2><div class="content"><p>${escapeHtml(importerName)}</p></div></div>
-    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>기타 안내사항</h2><div class="content">${otherInfoHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>제품명</h2><div class="content">${data.productNameHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>성상</h2><div class="content">${data.appearanceHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>원료약품 및 그 분량</h2><div class="content">${data.ingredientHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>효능효과</h2><div class="content">${data.indicationsHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>용법·용량</h2><div class="content">${data.dosageHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>사용상의 주의사항</h2><div class="content">${data.precautionsCombinedHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>포장단위</h2><div class="content">${data.packagingHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>저장방법, 사용기간</h2><div class="content">${data.storageHtml}</div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>제조원</h2><div class="content"><p>${escapeHtml(data.manufName)}</p></div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>수입자</h2><div class="content"><p>${escapeHtml(data.importerName)}</p></div></div>
+    <div class="section"><h2 class="collapsible"><span class="toggle">▶</span>기타 안내사항</h2><div class="content">${data.otherInfoHtml}</div></div>
 
     <script type="text/plain" id="orig-xml">${xmlForScript}<\/script>
     <script>
@@ -504,7 +521,6 @@
         link.click();
         document.body.removeChild(link);
       }
-
       document.querySelectorAll('.section > h2.collapsible').forEach(header => {
         header.addEventListener('click', () => {
           const content = header.nextElementSibling;
@@ -513,7 +529,6 @@
           header.querySelector('.toggle').textContent = isOpen ? '▶' : '▼';
         });
       });
-
       document.getElementById('expand-all').addEventListener('click', function() {
         const allContents = document.querySelectorAll('.content');
         const isExpanded = this.textContent === '모두 접기';
@@ -525,16 +540,22 @@
   </div>
 </body>
 </html>`;
+    }
 
-        // --- 3. TRIGGER DOWNLOADS ---
-        // Download XML
-        downloadFile("epi-document.xml", fullXml, "text/xml");
-        
-        // Download HTML
-        // Small delay to ensure browser doesn't block second download
-        setTimeout(() => {
-            downloadFile("epi-viewer.html", viewerHtml, "text/html");
-        }, 500);
+    // ------------------------------------------------------------------
+    // 4. Handlers
+    // ------------------------------------------------------------------
+    function handleDownloadXML() {
+        const data = collectFormData();
+        const xml = buildFHIRXML(data);
+        downloadFile("epi-document.xml", xml, "text/xml");
+    }
+
+    function handleDownloadHTML() {
+        const data = collectFormData();
+        const xml = buildFHIRXML(data);
+        const html = buildHTMLViewer(data, xml);
+        downloadFile("epi-viewer.html", html, "text/html");
     }
 
     function downloadFile(filename, content, mimeType) {
