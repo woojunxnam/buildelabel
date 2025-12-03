@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePI FHIR XML Generator (MFDS Compatible - v2.4)</title>
+    <title>ePI FHIR XML Generator (MFDS Compatible - v2.5)</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -28,14 +28,17 @@
         .action-area { margin-top: 40px; text-align: center; padding-top: 20px; border-top: 2px solid #eee; }
         .btn-generate { background-color: #27ae60; color: white; border: none; padding: 15px 30px; font-size: 1.1em; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
         .btn-generate:hover { background-color: #219150; }
-        /* Style specifically for the HTML extraction preview */
+        
+        /* Ensure preview looks like the final output */
+        .html-extract-preview table { border: 1px solid #ccc; border-collapse: collapse; width: 100%; }
+        .html-extract-preview td, .html-extract-preview th { border: 1px solid #ccc; padding: 5px; }
         .html-extract-preview img { max-width: 100%; height: auto; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>ePI XML Builder (v2.4)</h1>
+    <h1>ePI XML Builder (v2.5)</h1>
 
     <!-- 1. Basic Info -->
     <h2>기본 정보 (Author/Organization)</h2>
@@ -123,7 +126,7 @@
     <!-- NEW SECTION: Expert Info HTML Upload -->
     <div class="form-group" style="background: #eef2f5; padding: 15px; border-radius: 5px;">
         <label>전문가를 위한 정보 (HTML 파일 업로드) [선택사항]</label>
-        <p style="font-size:0.8em; color:#666; margin-top:-5px;">* 전체 HTML 파일에서 '전문가를 위한 정보' 항목부터 끝까지 자동으로 추출합니다.</p>
+        <p style="font-size:0.8em; color:#666; margin-top:-5px;">* 전체 HTML 파일에서 '전문가를 위한 정보' 항목부터 끝까지 자동으로 추출하며, 표 테두리를 자동으로 적용합니다.</p>
         <input type="file" id="fileExpert" accept=".html,.htm" onchange="handleHtmlUpload(this, 'previewExpert')">
         <div id="previewExpert" class="file-preview html-extract-preview"></div>
         <input type="hidden" id="dataExpert">
@@ -254,7 +257,7 @@
         reader.onload = function(e) {
             let htmlContent = e.target.result;
             
-            // Extract only the relevant section
+            // Extract only the relevant section AND fix tables
             const extractedHtml = extractExpertInfo(htmlContent);
             // Sanitize to XHTML
             const safeHtml = ensureXHTML(extractedHtml);
@@ -275,38 +278,49 @@
         const parser = new DOMParser();
         const doc = parser.parseFromString(fullHtml, "text/html");
         
-        // We want to find the section that contains "전문가를 위한 정보"
-        // and grab everything after it (including itself or its siblings).
-        // Since HTML structure varies, we iterate through body children.
-        
         let foundStart = false;
-        let result = "";
+        let resultHtml = "";
         
         const bodyChildren = doc.body.children;
         
         for (let i = 0; i < bodyChildren.length; i++) {
             const element = bodyChildren[i];
-            const text = element.textContent.trim().replace(/\s/g, ''); // remove spaces for comparison
+            const text = element.textContent.trim().replace(/\s/g, ''); // remove spaces
             
             // Check for trigger phrase
             if (!foundStart && text.includes("전문가를위한정보")) {
                 foundStart = true;
-                // Add a clean header
-                result += `<h3>전문가를 위한 정보</h3>`;
-                continue; // Skip adding the original title tag to avoid duplicate styling
+                resultHtml += `<h3>전문가를 위한 정보</h3>`;
+                continue; 
             }
             
             if (foundStart) {
-                // Accumulate HTML
-                result += element.outerHTML;
+                resultHtml += element.outerHTML;
             }
         }
         
         if (!foundStart) {
             return "<p>전문가를 위한 정보 섹션을 찾을 수 없습니다.</p>";
         }
+
+        // --- TABLE FIX LOGIC ---
+        // Now parse the *extracted* result again to inject table styles
+        const tempParser = new DOMParser();
+        const tempDoc = tempParser.parseFromString(`<div>${resultHtml}</div>`, "text/html");
         
-        return result;
+        // Find all tables in the extracted content
+        const tables = tempDoc.querySelectorAll("table");
+        tables.forEach(tbl => {
+            // Force border attributes and styles so lines are visible
+            tbl.setAttribute("border", "1");
+            tbl.setAttribute("cellspacing", "0");
+            tbl.setAttribute("cellpadding", "5");
+            tbl.style.borderCollapse = "collapse";
+            tbl.style.width = "100%";
+            tbl.style.marginTop = "10px";
+        });
+
+        return tempDoc.body.firstChild.innerHTML;
     }
 
     // ------------------------------------------------------------------
@@ -488,7 +502,7 @@
         addSection("용법·용량", "34068-7", dosageHtml);
         addSection("사용상의 주의사항", "43685-7", precautionsHtml);
         
-        // Insert Expert Info if available (using code for SPL unclassified section or Clinical Pharmacology)
+        // Insert Expert Info if available
         if(expertInfoRaw) {
             addSection("전문가를 위한 정보", "42229-5", expertInfoRaw);
         }
